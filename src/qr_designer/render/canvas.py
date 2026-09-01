@@ -2,20 +2,27 @@
 
 from __future__ import annotations
 
+from qr_designer.render.preview import PREVIEW_MAX_LADO, px_para_preview
 from qr_designer.scene.primitives import Circle, Escena, Path, Rect, Text
 
 
-def escala_preview(escena: Escena, max_lado: float = 280.0) -> float:
-    lado = max(escena.width, escena.height, 1.0)
-    return max_lado / lado
+def escala_preview(escena: Escena, max_lado: float = PREVIEW_MAX_LADO) -> float:
+    return float(px_para_preview(escena, max_lado))
 
 
-def pintar_canvas(canvas, escena: Escena, scale: float | None = None) -> float:
+def pintar_canvas(
+    canvas,
+    escena: Escena,
+    scale: float | None = None,
+    lienzo: int | None = None,
+) -> float:
+    max_lado = float(lienzo) if lienzo else PREVIEW_MAX_LADO
     if scale is None:
-        scale = escala_preview(escena)
+        scale = escala_preview(escena, max_lado)
+    w = max(1, round(escena.width * scale))
+    h = max(1, round(escena.height * scale))
     canvas.delete("all")
-    w, h = escena.width * scale, escena.height * scale
-    canvas.config(width=int(w), height=int(h))
+    canvas.config(width=w, height=h)
     canvas.create_rectangle(
         0,
         0,
@@ -28,10 +35,14 @@ def pintar_canvas(canvas, escena: Escena, scale: float | None = None) -> float:
     for item in escena.items:
         tags = (item.role, item.id)
         if isinstance(item, Rect):
-            x0, y0 = item.x * scale, item.y * scale
-            x1, y1 = (item.x + item.w) * scale, (item.y + item.h) * scale
             canvas.create_rectangle(
-                x0, y0, x1, y1, fill=item.fill, outline="", tags=tags
+                item.x * scale,
+                item.y * scale,
+                (item.x + item.w) * scale,
+                (item.y + item.h) * scale,
+                fill=item.fill,
+                outline="",
+                tags=tags,
             )
         elif isinstance(item, Circle):
             r = item.r * scale
@@ -56,7 +67,7 @@ def pintar_canvas(canvas, escena: Escena, scale: float | None = None) -> float:
                 item.y * scale,
                 text=item.text,
                 fill=item.fill,
-                font=("sans-serif", max(8, int(item.font_size * scale))),
+                font=("TkDefaultFont", max(8, int(item.font_size * scale))),
                 anchor="center",
                 tags=tags,
             )

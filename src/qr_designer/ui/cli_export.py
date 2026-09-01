@@ -6,9 +6,10 @@ import argparse
 from pathlib import Path
 from typing import Sequence
 
-from qr_designer.config.models import SolicitudQR
 from qr_designer.config.presets import preset_clasico, preset_por_nombre
-from qr_designer.export.exporter import exportar
+from qr_designer.export.paths import resolver_export
+from qr_designer.service.dto import perfil_a_dict
+from qr_designer.service.qr_service import exportar_qr
 
 
 def _parser() -> argparse.ArgumentParser:
@@ -31,12 +32,13 @@ def exportar_desde_argv(argv: Sequence[str]) -> int:
     perfil = preset_por_nombre(ns.preset) or preset_clasico()
     if ns.preset != "Clásico" and preset_por_nombre(ns.preset) is None:
         raise SystemExit(f"Preset desconocido: {ns.preset}")
-    destino = Path(ns.output)
-    fmt = ns.format or destino.suffix.lstrip(".").lower() or "svg"
-    resultado = exportar(SolicitudQR(contenido=ns.url, perfil=perfil), fmt, px_modulo=ns.px)
+    fmt_pedido = ns.format or Path(ns.output).suffix.lstrip(".").lower() or "svg"
+    destino, fmt = resolver_export(ns.output, fmt_pedido)
+    resultado = exportar_qr(ns.url, perfil_a_dict(perfil), fmt, ns.px)
     destino.parent.mkdir(parents=True, exist_ok=True)
-    destino.write_bytes(resultado.datos)
+    destino.write_bytes(resultado["datos"])
     print(
-        f"Exportado {destino} ({resultado.peso} bytes, {resultado.ancho}×{resultado.alto} {resultado.formato})"
+        f"Exportado {destino} ({resultado['peso']} bytes, "
+        f"{resultado['ancho']}×{resultado['alto']} {resultado['formato']})"
     )
     return 0

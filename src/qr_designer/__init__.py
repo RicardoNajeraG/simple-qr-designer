@@ -1,3 +1,5 @@
 """Generador de códigos QR personalizable."""
 
-__version__ = "0.1.0"
+from qr_designer.meta import version_app
+
+__version__ = version_app()

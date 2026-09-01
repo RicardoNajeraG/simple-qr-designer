@@ -9,17 +9,32 @@ from PIL import Image, ImageDraw, ImageFont
 from qr_designer.config.models import hex_a_rgb
 from qr_designer.scene.primitives import Circle, Escena, Path, Rect, Text
 
+FACTOR_SUPERSAMPLE = 4
+MAX_INTERMEDIO = 8192
+
 
 def _color(fill: str) -> tuple[int, int, int]:
     return hex_a_rgb(fill)
 
 
-def _escala(escena: Escena, ancho: int, alto: int) -> tuple[float, float]:
-    return ancho / escena.width, alto / escena.height
+def escena_tiene_curvas(escena: Escena) -> bool:
+    for item in escena.items:
+        if isinstance(item, (Circle, Path)):
+            return True
+        if isinstance(item, Rect) and (item.rx or item.ry):
+            return True
+    return False
 
 
-def rasterizar(escena: Escena, ancho: int, alto: int, formato: str) -> bytes:
-    sx, sy = _escala(escena, ancho, alto)
+def factor_supersample(ancho: int, alto: int, factor: int = FACTOR_SUPERSAMPLE) -> int:
+    max_lado = max(int(ancho), int(alto), 1)
+    if max_lado * factor > MAX_INTERMEDIO:
+        factor = MAX_INTERMEDIO // max_lado
+    return max(1, factor)
+
+
+def _dibujar(escena: Escena, ancho: int, alto: int) -> tuple[Image.Image, set[tuple[int, int, int]]]:
+    sx, sy = ancho / escena.width, alto / escena.height
     rgb = _color(escena.background)
     img = Image.new("RGB", (ancho, alto), rgb)
     draw = ImageDraw.Draw(img)
@@ -65,11 +80,23 @@ def rasterizar(escena: Escena, ancho: int, alto: int, formato: str) -> bytes:
                 font=font,
                 anchor="ms" if item.anchor == "middle" else None,
             )
+    return img, usados
+
+
+def rasterizar(escena: Escena, ancho: int, alto: int, formato: str) -> bytes:
+    curvas = escena_tiene_curvas(escena)
+    factor = factor_supersample(ancho, alto) if curvas else 1
+    img, usados = _dibujar(escena, ancho * factor, alto * factor)
+    if factor > 1:
+        img = img.resize((ancho, alto), Image.Resampling.LANCZOS)
 
     formato = formato.lower()
     buf = BytesIO()
     if formato == "png":
-        paletada = _a_paleta(img, usados)
+        if curvas:
+            paletada = img.quantize(colors=64, dither=Image.Dither.NONE)
+        else:
+            paletada = _a_paleta(img, usados)
         paletada.save(buf, format="PNG", optimize=True, compress_level=9)
     elif formato == "webp":
         img.save(buf, format="WEBP", lossless=True, quality=100, method=4)

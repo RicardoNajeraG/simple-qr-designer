@@ -9,7 +9,15 @@ from pathlib import Path
 
 import pytest
 
-from qr_designer.config.models import ColorScheme, Correccion, Perfil, SolicitudQR
+from qr_designer.config.models import (
+    ColorScheme,
+    Correccion,
+    ModuloEstilo,
+    OjoEstilo,
+    Perfil,
+    SolicitudQR,
+    hex_a_rgb,
+)
 from qr_designer.core.encoder import ContenidoVacioError
 from qr_designer.export.exporter import (
     DIMENSION_MAX,
@@ -90,6 +98,8 @@ def test_import_scene_svg_cli_no_carga_pillow() -> None:
         "qr_designer.ui.cli",
         "qr_designer.ui.viewmodel",
         "qr_designer.export.exporter",
+        "qr_designer.service.qr_service",
+        "qr_designer.render.preview",
     ):
         _assert_no_import(mod, ["PIL"])
 
@@ -153,9 +163,88 @@ def test_px_modulo_1_advierte() -> None:
 
 @pytest.mark.raster
 @pytest.mark.unit
+def test_png_curvas_mantiene_dimensiones_y_colores_dominantes() -> None:
+    pytest.importorskip("PIL")
+    from PIL import Image
+
+    from qr_designer.export.exporter import construir_escena_export, resolucion_recomendada
+
+    contenido = "https://example.com"
+    perfil = Perfil(
+        nombre="t",
+        modulo_estilo=ModuloEstilo.PUNTOS,
+        ojo_estilo=OjoEstilo.CIRCULO,
+        colores=ColorScheme(fondo="#ffffff", modulos="#cc0000", ojos="#0033aa", marco="#00aa00"),
+    )
+    solicitud = _sol(perfil, contenido)
+    r = exportar(solicitud, "png", px_modulo=8)
+    escena = construir_escena_export(solicitud)
+    ancho, alto = resolucion_recomendada(escena, 8)
+    assert r.ancho == ancho
+    assert r.alto == alto
+    assert r.ancho <= DIMENSION_MAX
+    assert r.alto <= DIMENSION_MAX
+
+    img = Image.open(BytesIO(r.datos)).convert("RGB")
+    paleta = {
+        hex_a_rgb(perfil.colores.fondo),
+        hex_a_rgb(perfil.colores.modulos),
+        hex_a_rgb(perfil.colores.ojos),
+    }
+    cercanos = 0
+    total = img.size[0] * img.size[1]
+    umbral = 40 * 40 * 3
+    for pixel in img.getdata():
+        if min(sum((a - b) ** 2 for a, b in zip(pixel, color)) for color in paleta) <= umbral:
+            cercanos += 1
+    assert cercanos / total > 0.80
+
+
+@pytest.mark.raster
+@pytest.mark.decode
+@pytest.mark.unit
+def test_png_curvas_se_decodifica() -> None:
+    pytest.importorskip("PIL")
+    zxingcpp = pytest.importorskip("zxingcpp")
+    from PIL import Image
+
+    contenido = "https://example.com/qr-designer-test"
+    perfil = Perfil(
+        nombre="t",
+        modulo_estilo=ModuloEstilo.PUNTOS,
+        ojo_estilo=OjoEstilo.CIRCULO,
+        correccion=Correccion.H,
+    )
+    r = exportar(_sol(perfil, contenido), "png", px_modulo=10)
+    img = Image.open(BytesIO(r.datos)).convert("RGB")
+    encontrados = zxingcpp.read_barcodes(img)
+    assert encontrados, "ZXing no leyó el PNG con curvas"
+    assert encontrados[0].text == contenido
+
+
+@pytest.mark.raster
+@pytest.mark.unit
+def test_supersampling_no_viola_dimension_max_en_salida() -> None:
+    pytest.importorskip("PIL")
+    from qr_designer.export.exporter import construir_escena_export, resolucion_recomendada
+
+    perfil = Perfil(
+        nombre="t",
+        modulo_estilo=ModuloEstilo.PUNTOS,
+        ojo_estilo=OjoEstilo.CIRCULO,
+    )
+    solicitud = _sol(perfil)
+    r = exportar(solicitud, "png", px_modulo=8)
+    escena = construir_escena_export(solicitud)
+    ancho, alto = resolucion_recomendada(escena, 8)
+    assert r.ancho == ancho <= DIMENSION_MAX
+    assert r.alto == alto <= DIMENSION_MAX
+
+
+@pytest.mark.raster
+@pytest.mark.unit
 def test_auto_eleva_ecc_solo_en_export() -> None:
     pytest.importorskip("PIL")
-    from qr_designer.config.models import ModuloEstilo
     from qr_designer.core.encoder import codificar
 
     perfil = Perfil(

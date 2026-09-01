@@ -1,11 +1,11 @@
 # QR Designer
 
-Generador de códigos QR personalizable para escritorio. Prioridad: **rápido y liviano**. La edición vive en una escena vectorial en memoria; Pillow solo se carga al exportar PNG/WEBP.
+Generador de códigos QR personalizable para escritorio. Prioridad: **rápido y liviano**. La edición vive en una escena vectorial en memoria; Pillow se carga al previsualizar o exportar PNG/WEBP.
 
 - Python ≥ 3.11
 - Dependencia de runtime: [`segno`](https://pypi.org/project/segno/)
 - GUI: tkinter (stdlib)
-- Extra opcional: Pillow para PNG/WEBP
+- Extra opcional: Pillow para PNG/WEBP (también para la vista previa a la misma calidad que el export)
 
 ## Instalación
 
@@ -28,20 +28,40 @@ uv run qr-designer --url "https://example.com" -o qr.svg
 uv run qr-designer --url "https://example.com" --preset Puntos -o qr.png --px 8
 ```
 
-Flujo de la GUI: pegar URL → el QR con el perfil por defecto ya está listo → **Exportar imagen**. Personalizar actualiza la vista previa en vivo. **Guardar perfil** es otra acción; el perfil nunca incluye la URL.
+Flujo de la GUI: pegar URL o texto (también con el ratón) → el QR con el perfil por defecto ya está listo → elige formato (SVG/PNG/WEBP) → **Exportar imagen**. La vista previa usa el mismo raster que el export (píxeles enteros por módulo, sin márgenes extra) y la ventana no puede hacerse más pequeña que ese recuadro. El divisor entre opciones y preview se arrastra para agrandar el panel de opciones. Personalizar actualiza en vivo. **Guardar perfil** es otra acción; el perfil nunca incluye la URL.
 
 Los parámetros técnicos (corrección de errores, píxeles por módulo) están en **Avanzado**, colapsado por defecto.
 
 ## Arquitectura
 
 ```
-contenido + perfil → MatrizQR (segno) → Escena (primitivas)
-                                      → SVG | Canvas tkinter | Pillow
+contenido + perfil dict
+        → service (fachada JSON-friendly)
+            → MatrizQR (segno) → Escena
+                → SVG | Pillow (export y preview)
+        → ui/viewmodel → GUI tkinter
 ```
 
-El raster **no** pasa por SVG. La quiet zone (≥ 4 módulos) no la recorta el marco. En preview se respeta la ECC del perfil; si está en `auto`, la elevación ocurre solo al exportar.
+La carpeta `src/qr_designer/service/` es el contrato previsto para un backend HTTP (FastAPI u otro) y un frontend web: entradas y salidas son `str`, `dict` y `bytes`. No hay tkinter ahí. Hoy lo consumen la GUI de escritorio y la CLI; mañana un servidor puede exponer los mismos métodos sin reescribir el núcleo.
+
+El raster **no** pasa por SVG. Estilos con curvas se supersamplean (y se reducen con LANCZOS) para anti-aliasing; el estilo clásico (rectángulos) sigue el fast path de paleta exacta. La quiet zone (≥ 4 módulos) no la recorta el marco. En preview se respeta la ECC del perfil; si está en `auto`, la elevación ocurre solo al exportar.
+
+El ícono de ventana es el mapache en PNG preescalados (`qr-designer-icon-32/64/256.png`). La cabecera usa `qr-designer-pet` y el banner ilustrado (sin texto «QR Designer»). La UI usa **Nunito** empaquetada (SIL OFL 1.1, TTF estáticos Regular/Bold) registrada en el proceso; si el registro falla, se cae a Segoe UI / SF Pro Text / Ubuntu. `tk scaling` se ajusta al DPI. Fondo blanco (`#ffffff`) como las ilustraciones.
 
 Perfiles de usuario: `~/.qr_designer/profiles.json` (schema versionado, escritura atómica). Los 5 presets de fábrica son de solo lectura.
+
+### Backend futuro
+
+Sin añadir dependencias ahora. El mapeo natural sería:
+
+| HTTP (previsto) | Servicio actual |
+|---|---|
+| `POST /qr` body `{contenido, perfil, formato, px}` | `qr_service.exportar_qr` |
+| `POST /qr.svg` | `qr_service.generar_svg` |
+| `POST /evaluar` | `qr_service.evaluar` |
+| `GET/PUT/DELETE /perfiles` | `ProfileService` |
+
+El frontend web llamaría a ese API y no necesitaría instalar Python ni descargar el escritorio.
 
 ## Tests
 
@@ -69,7 +89,15 @@ Marcadores: `unit`, `integration`, `raster` (Pillow), `decode` (zxing-cpp), `gui
 | Preview en vivo, debounce | `test_rux02_debounce_coalesce_rebuilds` |
 | Advertencia de contraste no bloqueante | `test_rf08_advertencia_no_bloquea_export` |
 | Quiet zone intocable | `test_scene.py::test_marco_no_recorta_quiet_zone` |
-| Paleta PNG con colores reales | `test_png_paleta_colores_exactos` |
+| Paleta PNG con colores reales | `test_png_paleta_colores_exactos` (estilo cuadrado) |
+| PNG con curvas nítido y escaneable | `test_png_curvas_*` (supersampling, decode ZXing) |
+| Preview = mismo raster que export | `test_preview.py` |
+| PNG/WEBP no se guardan como SVG | `test_export_dialog.py` (`resolver_export`, `filetypes_para`) |
+| Diálogo de guardado muestra el formato elegido | `test_filetypes_png_primero` |
+| Export PNG no se queda en «Exportando…» | `test_export_png_no_se_queda_exportando` |
+| Texto plano (no URL) se codifica y se lee | `test_roundtrip_texto_plano_no_url` |
+| Ícono, Nunito OFL, cabecera ilustrada y fondo blanco | `test_theme.py` |
+| Fachada lista para backend | `test_service.py` |
 
 ## Checklist manual (dispositivo)
 

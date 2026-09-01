@@ -6,7 +6,6 @@ from collections.abc import Callable
 from dataclasses import dataclass
 from typing import Protocol
 
-from qr_designer.config.contrast import ecc_recomendada_por_estilo, evaluar_contraste
 from qr_designer.config.models import (
     ColorScheme,
     Correccion,
@@ -14,12 +13,12 @@ from qr_designer.config.models import (
     ModuloEstilo,
     OjoEstilo,
     Perfil,
-    SolicitudQR,
 )
 from qr_designer.config.profiles import GestorPerfiles
-from qr_designer.core.encoder import MatrizQR, codificar
-from qr_designer.scene.builders import construir_escena
+from qr_designer.core.encoder import MatrizQR
 from qr_designer.scene.primitives import Escena
+from qr_designer.service.dto import perfil_a_dict, resultado_desde_dict
+from qr_designer.service.qr_service import evaluar, exportar_qr, previsualizar
 
 DEBOUNCE_MS = 16
 
@@ -99,17 +98,17 @@ class ViewModel:
         return f"{base} (modificado)" if self.modificado else base
 
     @property
-    def evaluacion_contraste(self):
-        return evaluar_contraste(self.perfil)
+    def _eval(self) -> dict:
+        return evaluar(perfil_a_dict(self.perfil))
 
     @property
     def advertencia_contraste(self) -> str | None:
-        ev = self.evaluacion_contraste
-        return " · ".join(ev.advertencias) if ev.advertencias else None
+        avisos = self._eval["advertencias"]
+        return " · ".join(avisos) if avisos else None
 
     @property
     def ecc_recomendada(self) -> str:
-        return ecc_recomendada_por_estilo(self.perfil)
+        return str(self._eval["ecc_recomendada"])
 
     def set_url(self, url: str) -> None:
         self.acciones += 1
@@ -166,9 +165,10 @@ class ViewModel:
         if not self.puede_exportar:
             raise ValueError("No hay contenido para exportar")
         self.acciones += 1
-        from qr_designer.export.exporter import exportar as _exportar
-
-        return _exportar(SolicitudQR(self.contenido, self.perfil), formato, px_modulo)
+        bruto = exportar_qr(
+            self.contenido, perfil_a_dict(self.perfil), formato, px_modulo
+        )
+        return resultado_desde_dict(bruto)
 
     def _touch(self, perfil: Perfil) -> None:
         self.perfil = perfil
@@ -182,15 +182,10 @@ class ViewModel:
 
     def _rebuild(self) -> None:
         self._handle = None
-        if not self.contenido.strip():
-            self.escena = None
-            self.matriz = None
-            if self.on_change is not None:
-                self.on_change()
-            return
-        self.rebuilds += 1
-        ecc = Correccion.M if self.perfil.correccion is Correccion.AUTO else self.perfil.correccion
-        self.matriz = codificar(self.contenido, ecc)
-        self.escena = construir_escena(self.matriz, self.perfil)
+        escena, matriz = previsualizar(self.contenido, perfil_a_dict(self.perfil))
+        self.escena = escena
+        self.matriz = matriz
+        if escena is not None:
+            self.rebuilds += 1
         if self.on_change is not None:
             self.on_change()

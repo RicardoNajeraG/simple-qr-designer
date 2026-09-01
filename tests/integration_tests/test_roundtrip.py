@@ -18,6 +18,7 @@ from qr_designer.config.models import (
 from qr_designer.export.exporter import exportar
 
 PAYLOAD = "https://example.com/qr-designer-test"
+PAYLOAD_TEXTO = "Hola mundo, esto no es una URL"
 
 
 def _casos_pairwise() -> list[tuple]:
@@ -101,3 +102,16 @@ def test_roundtrip_puntos_ecc_h() -> None:
     )
     r = exportar(SolicitudQR(PAYLOAD, perfil), "png", px_modulo=10)
     assert _decodificar_png(r.datos) == PAYLOAD
+
+
+@pytest.mark.integration
+@pytest.mark.decode
+@pytest.mark.raster
+def test_roundtrip_texto_plano_no_url() -> None:
+    pytest.importorskip("PIL")
+    pytest.importorskip("zxingcpp")
+    from qr_designer.service.dto import perfil_a_dict
+    from qr_designer.service.qr_service import exportar_qr
+
+    out = exportar_qr(PAYLOAD_TEXTO, perfil_a_dict(Perfil(nombre="t")), "png", 10)
+    assert _decodificar_png(out["datos"]) == PAYLOAD_TEXTO
