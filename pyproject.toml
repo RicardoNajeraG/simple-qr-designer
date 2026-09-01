@@ -1,0 +1,40 @@
+[project]
+name = "qr-designer"
+version = "0.1.0"
+description = "Generador de códigos QR personalizable, rápido y liviano"
+readme = "README.md"
+authors = [
+    { name = "Ricardo Nájera", email = "ricardonajera93@gmail.com" }
+]
+requires-python = ">=3.11"
+dependencies = [
+    "segno>=1.6",
+]
+
+[project.optional-dependencies]
+raster = ["pillow>=10"]
+dev = ["pytest>=8"]
+decode = [
+    "zxing-cpp>=2.2",
+]
+
+[project.scripts]
+qr-designer = "qr_designer.ui.cli:main"
+
+[build-system]
+requires = ["uv_build>=0.11.28,<0.12.0"]
+build-backend = "uv_build"
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+pythonpath = ["src"]
+markers = [
+    "unit: tests unitarios",
+    "integration: tests de integración",
+    "decode: requiere zxing-cpp",
+    "raster: requiere Pillow",
+    "gui: requiere DISPLAY y tkinter",
+]
+filterwarnings = [
+    "ignore::DeprecationWarning",
+]

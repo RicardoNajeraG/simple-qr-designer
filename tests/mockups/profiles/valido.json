@@ -1,0 +1,20 @@
+{
+  "schema_version": 1,
+  "perfiles": {
+    "Marca": {
+      "nombre": "Marca",
+      "modulo_estilo": "puntos",
+      "ojo_estilo": "circulo",
+      "marco_tipo": "ninguno",
+      "marco_texto": null,
+      "correccion": "H",
+      "colores": {
+        "fondo": "#ffffff",
+        "modulos": "#0b3d91",
+        "ojos": "#0b3d91",
+        "marco": "#0b3d91"
+      },
+      "quiet_zone": 4
+    }
+  }
+}

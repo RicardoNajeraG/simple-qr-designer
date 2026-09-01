@@ -1,0 +1,17 @@
+{
+  "Viejo": {
+    "nombre": "Viejo",
+    "modulo_estilo": "cuadrado",
+    "ojo_estilo": "cuadrado",
+    "marco_tipo": "perimetro",
+    "marco_texto": null,
+    "correccion": "Q",
+    "colores": {
+      "fondo": "#ffffff",
+      "modulos": "#222222",
+      "ojos": "#222222",
+      "marco": "#222222"
+    },
+    "quiet_zone": 4
+  }
+}

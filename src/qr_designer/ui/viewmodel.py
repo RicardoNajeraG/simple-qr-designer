@@ -1,0 +1,196 @@
+"""Estado de la aplicación sin widgets. Debounce inyectable."""
+
+from __future__ import annotations
+
+from collections.abc import Callable
+from dataclasses import dataclass
+from typing import Protocol
+
+from qr_designer.config.contrast import ecc_recomendada_por_estilo, evaluar_contraste
+from qr_designer.config.models import (
+    ColorScheme,
+    Correccion,
+    MarcoTipo,
+    ModuloEstilo,
+    OjoEstilo,
+    Perfil,
+    SolicitudQR,
+)
+from qr_designer.config.profiles import GestorPerfiles
+from qr_designer.core.encoder import MatrizQR, codificar
+from qr_designer.scene.builders import construir_escena
+from qr_designer.scene.primitives import Escena
+
+DEBOUNCE_MS = 16
+
+
+class Programador(Protocol):
+    def programar(self, ms: int, callback: Callable[[], None]) -> object: ...
+    def cancelar(self, handle: object) -> None: ...
+
+
+class ProgramadorInmediato:
+    def programar(self, ms: int, callback: Callable[[], None]) -> object:
+        callback()
+        return 0
+
+    def cancelar(self, handle: object) -> None:
+        return None
+
+
+@dataclass
+class _Pendiente:
+    handle: object
+    ms: int
+    callback: Callable[[], None]
+
+
+class ProgramadorManual:
+    """Acumula callbacks para tests de coalescing."""
+
+    def __init__(self) -> None:
+        self.pendientes: list[_Pendiente] = []
+
+    def programar(self, ms: int, callback: Callable[[], None]) -> object:
+        handle = object()
+        self.pendientes.append(_Pendiente(handle, ms, callback))
+        return handle
+
+    def cancelar(self, handle: object) -> None:
+        self.pendientes = [p for p in self.pendientes if p.handle is not handle]
+
+    def flush(self) -> None:
+        cbs = [p.callback for p in self.pendientes]
+        self.pendientes.clear()
+        for cb in cbs:
+            cb()
+
+
+class ViewModel:
+    def __init__(
+        self,
+        gestor: GestorPerfiles | None = None,
+        programador: Programador | None = None,
+        debounce_ms: int = DEBOUNCE_MS,
+    ) -> None:
+        self.gestor = gestor or GestorPerfiles()
+        self.programador = programador or ProgramadorInmediato()
+        self.debounce_ms = debounce_ms
+        self.contenido = ""
+        self.perfil = self.gestor.por_defecto()
+        self.perfil_origen = self.perfil.nombre
+        self.modificado = False
+        self.avanzado_colapsado = True
+        self.acciones = 0
+        self.rebuilds = 0
+        self.escena: Escena | None = None
+        self.matriz: MatrizQR | None = None
+        self._handle: object | None = None
+        self.on_change: Callable[[], None] | None = None
+        self._rebuild()
+
+    @property
+    def puede_exportar(self) -> bool:
+        return bool(self.contenido.strip()) and self.escena is not None
+
+    @property
+    def etiqueta_perfil(self) -> str:
+        base = self.perfil_origen
+        return f"{base} (modificado)" if self.modificado else base
+
+    @property
+    def evaluacion_contraste(self):
+        return evaluar_contraste(self.perfil)
+
+    @property
+    def advertencia_contraste(self) -> str | None:
+        ev = self.evaluacion_contraste
+        return " · ".join(ev.advertencias) if ev.advertencias else None
+
+    @property
+    def ecc_recomendada(self) -> str:
+        return ecc_recomendada_por_estilo(self.perfil)
+
+    def set_url(self, url: str) -> None:
+        self.acciones += 1
+        self.contenido = url
+        self._rebuild()
+
+    def aplicar_perfil(self, nombre: str) -> None:
+        self.acciones += 1
+        self.perfil = self.gestor.obtener(nombre)
+        self.perfil_origen = nombre
+        self.modificado = False
+        self._programar_rebuild()
+
+    def guardar_perfil(self, nombre: str | None = None, overwrite: bool = False) -> None:
+        destino = (nombre or self.perfil.nombre).strip()
+        perfil = Perfil(
+            nombre=destino,
+            modulo_estilo=self.perfil.modulo_estilo,
+            ojo_estilo=self.perfil.ojo_estilo,
+            marco_tipo=self.perfil.marco_tipo,
+            marco_texto=self.perfil.marco_texto,
+            correccion=self.perfil.correccion,
+            colores=self.perfil.colores,
+            quiet_zone=self.perfil.quiet_zone,
+        )
+        self.gestor.guardar(perfil, overwrite=overwrite)
+        self.perfil = perfil
+        self.perfil_origen = destino
+        self.modificado = False
+
+    def set_modulo(self, estilo: ModuloEstilo) -> None:
+        self._touch(self.perfil.__class__(**{**self.perfil.to_dict(), "modulo_estilo": estilo}))
+
+    def set_ojo(self, estilo: OjoEstilo) -> None:
+        self._touch(Perfil(**{**self.perfil.to_dict(), "ojo_estilo": estilo}))
+
+    def set_marco(self, tipo: MarcoTipo) -> None:
+        self._touch(Perfil(**{**self.perfil.to_dict(), "marco_tipo": tipo}))
+
+    def set_marco_texto(self, texto: str) -> None:
+        self._touch(Perfil(**{**self.perfil.to_dict(), "marco_texto": texto}))
+
+    def set_correccion(self, correccion: Correccion) -> None:
+        self._touch(Perfil(**{**self.perfil.to_dict(), "correccion": correccion}))
+
+    def set_color(self, campo: str, valor: str) -> None:
+        actual = self.perfil.colores.to_dict()
+        if campo not in actual:
+            raise ValueError(f"Campo de color desconocido: {campo}")
+        actual[campo] = valor
+        self._touch(Perfil(**{**self.perfil.to_dict(), "colores": ColorScheme.from_dict(actual)}))
+
+    def exportar(self, formato: str, px_modulo: int | None = None):
+        if not self.puede_exportar:
+            raise ValueError("No hay contenido para exportar")
+        self.acciones += 1
+        from qr_designer.export.exporter import exportar as _exportar
+
+        return _exportar(SolicitudQR(self.contenido, self.perfil), formato, px_modulo)
+
+    def _touch(self, perfil: Perfil) -> None:
+        self.perfil = perfil
+        self.modificado = True
+        self._programar_rebuild()
+
+    def _programar_rebuild(self) -> None:
+        if self._handle is not None:
+            self.programador.cancelar(self._handle)
+        self._handle = self.programador.programar(self.debounce_ms, self._rebuild)
+
+    def _rebuild(self) -> None:
+        self._handle = None
+        if not self.contenido.strip():
+            self.escena = None
+            self.matriz = None
+            if self.on_change is not None:
+                self.on_change()
+            return
+        self.rebuilds += 1
+        ecc = Correccion.M if self.perfil.correccion is Correccion.AUTO else self.perfil.correccion
+        self.matriz = codificar(self.contenido, ecc)
+        self.escena = construir_escena(self.matriz, self.perfil)
+        if self.on_change is not None:
+            self.on_change()
