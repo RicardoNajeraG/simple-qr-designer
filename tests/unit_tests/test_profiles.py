@@ -210,6 +210,99 @@ def test_duplicar_a_nombre_existente_falla(gestor: GestorPerfiles) -> None:
 
 
 @pytest.mark.unit
+def test_schema_v1_sin_logo_carga_y_migra(tmp_path: Path) -> None:
+    dest = tmp_path / "profiles.json"
+    dest.write_text(
+        json.dumps(
+            {
+                "schema_version": 1,
+                "perfiles": {
+                    "Mia": {
+                        "nombre": "Mia",
+                        "modulo_estilo": "cuadrado",
+                        "ojo_estilo": "cuadrado",
+                        "marco_tipo": "ninguno",
+                        "correccion": "M",
+                        "colores": {
+                            "fondo": "#ffffff",
+                            "modulos": "#000000",
+                            "ojos": "#000000",
+                            "marco": "#000000",
+                        },
+                        "quiet_zone": 4,
+                    }
+                },
+            }
+        ),
+        encoding="utf-8",
+    )
+    g = GestorPerfiles(dest)
+    p = g.obtener("Mia")
+    assert p.logo_path is None
+    assert p.logo_id is None
+    data = json.loads(dest.read_text(encoding="utf-8"))
+    assert data["schema_version"] == SCHEMA_VERSION
+    assert SCHEMA_VERSION >= 3
+
+
+@pytest.mark.unit
+def test_guardar_y_duplicar_conservan_logo_path(gestor: GestorPerfiles, tmp_path: Path) -> None:
+    logo = tmp_path / "marca.png"
+    logo.write_text("no-es-png", encoding="utf-8")
+    gestor.guardar(Perfil(nombre="Mia", logo_path=str(logo)))
+    assert gestor.obtener("Mia").logo_path == str(logo)
+    copia = gestor.duplicar("Mia", "Copia")
+    assert copia.logo_path == str(logo)
+    for p in PRESETS:
+        assert p.logo_path is None
+        assert p.logo_id is None
+
+
+@pytest.mark.unit
+def test_guardar_conserva_logo_id(gestor: GestorPerfiles) -> None:
+    gestor.guardar(Perfil(nombre="Mia", logo_id="wifi"))
+    assert gestor.obtener("Mia").logo_id == "wifi"
+    copia = gestor.duplicar("Mia", "Copia")
+    assert copia.logo_id == "wifi"
+
+
+@pytest.mark.unit
+def test_schema_v2_sin_logo_id_carga(tmp_path: Path) -> None:
+    dest = tmp_path / "profiles.json"
+    dest.write_text(
+        json.dumps(
+            {
+                "schema_version": 2,
+                "perfiles": {
+                    "Mia": {
+                        "nombre": "Mia",
+                        "modulo_estilo": "cuadrado",
+                        "ojo_estilo": "cuadrado",
+                        "marco_tipo": "ninguno",
+                        "correccion": "M",
+                        "colores": {
+                            "fondo": "#ffffff",
+                            "modulos": "#000000",
+                            "ojos": "#000000",
+                            "marco": "#000000",
+                        },
+                        "quiet_zone": 4,
+                        "logo_path": "/tmp/x.png",
+                    }
+                },
+            }
+        ),
+        encoding="utf-8",
+    )
+    g = GestorPerfiles(dest)
+    p = g.obtener("Mia")
+    assert p.logo_path == "/tmp/x.png"
+    assert p.logo_id is None
+    data = json.loads(dest.read_text(encoding="utf-8"))
+    assert data["schema_version"] == SCHEMA_VERSION
+
+
+@pytest.mark.unit
 def test_es_preset() -> None:
     from qr_designer.config.profiles import es_preset
 

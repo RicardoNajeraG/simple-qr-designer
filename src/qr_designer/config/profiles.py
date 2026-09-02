@@ -7,6 +7,7 @@ import os
 import shutil
 import sys
 import tempfile
+from dataclasses import replace
 from pathlib import Path
 from typing import Any, Mapping
 
@@ -14,7 +15,7 @@ from qr_designer.config.models import Perfil
 from qr_designer.config.presets import NOMBRES_PRESET, PRESETS, preset_por_nombre
 from qr_designer.core.encoder import QRDesignerError
 
-SCHEMA_VERSION = 1
+SCHEMA_VERSION = 3
 _DIR_APP = "QR Designer"
 
 
@@ -153,16 +154,7 @@ class GestorPerfiles:
         if nuevo in usuarios and nuevo != viejo:
             raise PerfilYaExiste(nuevo)
         perfil = usuarios.pop(viejo)
-        usuarios[nuevo] = Perfil(
-            nombre=nuevo,
-            modulo_estilo=perfil.modulo_estilo,
-            ojo_estilo=perfil.ojo_estilo,
-            marco_tipo=perfil.marco_tipo,
-            marco_texto=perfil.marco_texto,
-            correccion=perfil.correccion,
-            colores=perfil.colores,
-            quiet_zone=perfil.quiet_zone,
-        )
+        usuarios[nuevo] = replace(perfil, nombre=nuevo)
         self._guardar_usuarios(usuarios)
 
     def duplicar(self, origen: str, nuevo: str) -> Perfil:

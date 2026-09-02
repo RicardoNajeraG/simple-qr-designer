@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import tkinter as tk
 from collections.abc import Callable
+from pathlib import Path
 from tkinter import messagebox, simpledialog, ttk
 
 from qr_designer.config.models import MarcoTipo, Perfil
@@ -105,7 +106,9 @@ class DialogoPerfiles(tk.Toplevel):
         self.lbl_marco_texto = ttk.Label(self.frm_marco_texto, text="")
         self.lbl_marco_texto.pack(anchor=tk.W)
         self.lbl_ecc = ttk.Label(centro, text="")
-        self.lbl_ecc.pack(anchor=tk.W, pady=(4, 8))
+        self.lbl_ecc.pack(anchor=tk.W, pady=(4, 0))
+        self.lbl_logo = ttk.Label(centro, text="", style="Muted.TLabel")
+        self.lbl_logo.pack(anchor=tk.W, pady=(0, 8))
         self.frm_colores = ttk.Frame(centro)
         self.frm_colores.pack(anchor=tk.W, pady=(0, 8))
         self._swatches: dict[str, tk.Frame] = {}
@@ -237,6 +240,12 @@ class DialogoPerfiles(tk.Toplevel):
             if str(self.frm_marco_texto.winfo_manager()) != "pack":
                 self.frm_marco_texto.pack(anchor=tk.W, after=self.lbl_marco)
         self.lbl_ecc.config(text=f"Corrección: {perfil.correccion.value}")
+        if perfil.logo_id:
+            self.lbl_logo.config(text=f"Logo: {perfil.logo_id}")
+        elif perfil.logo_path:
+            self.lbl_logo.config(text=f"Logo: {Path(perfil.logo_path).name}")
+        else:
+            self.lbl_logo.config(text="Logo: (ninguno)")
         colores = perfil.colores.to_dict()
         for campo, valor in colores.items():
             self._swatches[campo].config(bg=valor)

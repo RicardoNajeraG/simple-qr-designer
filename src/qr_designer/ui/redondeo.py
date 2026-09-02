@@ -5,7 +5,7 @@ from __future__ import annotations
 import tkinter as tk
 from tkinter import ttk
 
-from qr_designer.ui.theme import BORDE, FONDO, MARCO_PREVIEW, SUPERFICIE
+from qr_designer.ui.theme import ACENTO, BORDE, FONDO, MARCO_PREVIEW, SUPERFICIE
 
 RADIO_MARCO = 14
 RADIO_CONTROL = 8
@@ -166,7 +166,7 @@ class CajaRedonda(tk.Canvas):
             # Entero pequeño: el geom. manager estira el cromo; "10c" infla el reqwidth.
             self.configure(width=8)
         else:
-            self.configure(width=max(rw + 2 * self.PAD, 8))
+            self.configure(width=max(rw + 2 * self.PAD + 4, 8))
 
     def _redibujar(self, event=None) -> None:
         if event is not None and str(event.widget) != str(self):
@@ -192,6 +192,14 @@ class CajaRedonda(tk.Canvas):
                 height=max(1, h - 2 * pad),
             )
         self.tag_lower("rr")
+
+    def set_borde(self, borde: str) -> None:
+        self.borde = borde
+        self._redibujar()
+
+    @property
+    def presionado(self) -> bool:
+        return self.borde == ACENTO
 
 
 def envolver(

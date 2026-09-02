@@ -2,7 +2,20 @@
 
 from __future__ import annotations
 
-from qr_designer.scene.primitives import Circle, Escena, Path, Primitiva, Rect, Text
+import base64
+from pathlib import Path as FsPath
+
+from qr_designer.scene.logo import svg_en_caja
+from qr_designer.scene.primitives import Circle, Escena, Imagen, Path, Primitiva, Rect, Text
+
+_MIME = {
+    ".png": "image/png",
+    ".jpg": "image/jpeg",
+    ".jpeg": "image/jpeg",
+    ".gif": "image/gif",
+    ".webp": "image/webp",
+    ".svg": "image/svg+xml",
+}
 
 
 def _n(v: float) -> str:
@@ -59,7 +72,31 @@ def _item_svg(item: Primitiva) -> str:
             f' font-size="{_n(item.font_size)}" text-anchor="{anchor}"'
             f' font-family="sans-serif">{_esc(item.text)}</text>'
         )
+    if isinstance(item, Imagen):
+        return _imagen_svg(item)
     raise TypeError(f"Primitiva desconocida: {type(item)!r}")
+
+
+def _imagen_svg(item: Imagen) -> str:
+    path = FsPath(item.ruta)
+    try:
+        bruto = path.read_bytes()
+    except OSError:
+        return ""
+    if not bruto:
+        return ""
+    if path.suffix.lower() == ".svg":
+        anidado = svg_en_caja(bruto, item.x, item.y, item.w, item.h)
+        if anidado:
+            return anidado
+    mime = _MIME.get(path.suffix.lower(), "image/png")
+    b64 = base64.b64encode(bruto).decode("ascii")
+    return (
+        f'<image href="data:{mime};base64,{b64}"'
+        f' x="{_n(item.x)}" y="{_n(item.y)}"'
+        f' width="{_n(item.w)}" height="{_n(item.h)}"'
+        ' preserveAspectRatio="xMidYMid meet"/>'
+    )
 
 
 def escena_a_svg(escena: Escena) -> str:

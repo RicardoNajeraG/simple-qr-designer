@@ -34,6 +34,8 @@ def test_perfil_defaults_clasicos() -> None:
     assert perfil.marco_texto is None
     assert perfil.correccion is Correccion.M
     assert perfil.quiet_zone == 4
+    assert perfil.logo_path is None
+    assert perfil.logo_id is None
     assert perfil.colores.fondo == "#ffffff"
     assert perfil.colores.modulos == "#000000"
     assert perfil.colores.ojos == "#000000"
@@ -114,12 +116,38 @@ def test_serializacion_dict_redonda_e_ignora_url_colada() -> None:
         correccion=Correccion.H,
         colores=ColorScheme(fondo="#eee", modulos="#111", ojos="#222", marco="#333"),
         quiet_zone=5,
+        logo_path="/tmp/marca.png",
     )
     data = original.to_dict()
     data["url"] = "https://no-debe-guardarse.com"
     restaurado = Perfil.from_dict(data)
     assert restaurado == original
     assert "url" not in restaurado.to_dict()
+    assert restaurado.logo_path == "/tmp/marca.png"
+
+
+@pytest.mark.unit
+def test_logo_path_vacio_es_none_y_redondea() -> None:
+    assert Perfil(nombre="x", logo_path="").logo_path is None
+    assert Perfil(nombre="x", logo_path="   ").logo_path is None
+    original = Perfil(nombre="Marca", logo_path="/tmp/marca.png")
+    data = original.to_dict()
+    assert data["logo_path"] == "/tmp/marca.png"
+    assert Perfil.from_dict(data) == original
+    sin_clave = Perfil.from_dict({"nombre": "y"})
+    assert sin_clave.logo_path is None
+    assert sin_clave.logo_id is None
+
+
+@pytest.mark.unit
+def test_logo_id_vacio_es_none_y_redondea() -> None:
+    assert Perfil(nombre="x", logo_id="").logo_id is None
+    assert Perfil(nombre="x", logo_id="   ").logo_id is None
+    original = Perfil(nombre="Marca", logo_id="wifi")
+    data = original.to_dict()
+    assert data["logo_id"] == "wifi"
+    assert Perfil.from_dict(data) == original
+    assert Perfil.from_dict({"nombre": "y"}).logo_id is None
 
 
 @pytest.mark.unit

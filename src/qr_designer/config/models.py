@@ -130,6 +130,8 @@ class Perfil:
     correccion: Correccion = Correccion.M
     colores: ColorScheme = field(default_factory=ColorScheme)
     quiet_zone: int = QUIET_ZONE_MIN
+    logo_path: str | None = None
+    logo_id: str | None = None
 
     def __post_init__(self) -> None:
         if not self.nombre or not str(self.nombre).strip():
@@ -149,6 +151,14 @@ class Perfil:
             raise ValueError(
                 f"La quiet zone debe ser al menos {QUIET_ZONE_MIN} módulos"
             )
+        ruta = self.logo_path
+        if ruta is not None:
+            limpio = str(ruta).strip()
+            object.__setattr__(self, "logo_path", limpio or None)
+        ident = self.logo_id
+        if ident is not None:
+            limpio_id = str(ident).strip()
+            object.__setattr__(self, "logo_id", limpio_id or None)
 
     def to_dict(self) -> dict[str, Any]:
         return {
@@ -160,6 +170,8 @@ class Perfil:
             "correccion": self.correccion.value,
             "colores": self.colores.to_dict(),
             "quiet_zone": self.quiet_zone,
+            "logo_path": self.logo_path,
+            "logo_id": self.logo_id,
         }
 
     @classmethod
@@ -173,6 +185,8 @@ class Perfil:
             "correccion",
             "colores",
             "quiet_zone",
+            "logo_path",
+            "logo_id",
         }
         kwargs: dict[str, Any] = {k: data[k] for k in conocidos if k in data}
         if "colores" in kwargs and isinstance(kwargs["colores"], Mapping):

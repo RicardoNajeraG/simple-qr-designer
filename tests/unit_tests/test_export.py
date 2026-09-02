@@ -127,7 +127,7 @@ def test_png_paleta_colores_exactos() -> None:
     assert img.size == (r.ancho, r.alto)
     pal = img.getpalette()
     assert pal is not None
-    indices = set(img.getdata())
+    indices = set(img.get_flattened_data())
     rgbs = {tuple(pal[i * 3 : i * 3 + 3]) for i in indices}
     esperados = {(255, 255, 255), (204, 0, 0), (0, 51, 170)}
     assert rgbs <= esperados | {(0, 170, 0)}
@@ -149,7 +149,7 @@ def test_webp_lossless_roundtrip_pixels() -> None:
     rgb = img.convert("RGB")
     rgb.save(buf, format="WEBP", lossless=True, quality=100)
     otra = Image.open(BytesIO(buf.getvalue())).convert("RGB")
-    assert list(rgb.getdata()) == list(otra.getdata())
+    assert rgb.get_flattened_data() == otra.get_flattened_data()
 
 
 @pytest.mark.raster
@@ -194,7 +194,7 @@ def test_png_curvas_mantiene_dimensiones_y_colores_dominantes() -> None:
     cercanos = 0
     total = img.size[0] * img.size[1]
     umbral = 40 * 40 * 3
-    for pixel in img.getdata():
+    for pixel in img.get_flattened_data():
         if min(sum((a - b) ** 2 for a, b in zip(pixel, color)) for color in paleta) <= umbral:
             cercanos += 1
     assert cercanos / total > 0.80
@@ -239,6 +239,70 @@ def test_supersampling_no_viola_dimension_max_en_salida() -> None:
     ancho, alto = resolucion_recomendada(escena, 8)
     assert r.ancho == ancho <= DIMENSION_MAX
     assert r.alto == alto <= DIMENSION_MAX
+
+
+@pytest.mark.raster
+@pytest.mark.unit
+def test_png_con_logo_no_paleta_y_pinta_centro(tmp_path: Path) -> None:
+    pytest.importorskip("PIL")
+    from PIL import Image
+
+    from tests.png_bytes import escribir_png
+
+    logo = escribir_png(tmp_path / "logo.png", 40, 40, (255, 0, 0))
+    sin = exportar(_sol(), "png", px_modulo=8)
+    con = exportar(_sol(Perfil(nombre="t", logo_path=str(logo))), "png", px_modulo=8)
+    img_sin = Image.open(BytesIO(sin.datos)).convert("RGB")
+    img_con = Image.open(BytesIO(con.datos))
+    assert img_con.mode != "P"
+    rgb = img_con.convert("RGB")
+    cx, cy = rgb.size[0] // 2, rgb.size[1] // 2
+    assert img_sin.getpixel((cx, cy)) != rgb.getpixel((cx, cy))
+    r, g, b = rgb.getpixel((cx, cy))
+    assert r > 200 and g < 40 and b < 40
+
+
+@pytest.mark.raster
+@pytest.mark.unit
+def test_png_con_logo_svg_pinta_centro(tmp_path: Path) -> None:
+    pytest.importorskip("PIL")
+    from PIL import Image
+
+    from tests.png_bytes import escribir_svg_rect
+
+    logo = escribir_svg_rect(tmp_path / "logo.svg", 40, 40, "#ff0000")
+    sin = exportar(_sol(), "png", px_modulo=8)
+    con = exportar(_sol(Perfil(nombre="t", logo_path=str(logo))), "png", px_modulo=8)
+    img_sin = Image.open(BytesIO(sin.datos)).convert("RGB")
+    img_con = Image.open(BytesIO(con.datos))
+    assert img_con.mode != "P"
+    rgb = img_con.convert("RGB")
+    cx, cy = rgb.size[0] // 2, rgb.size[1] // 2
+    assert img_sin.getpixel((cx, cy)) != rgb.getpixel((cx, cy))
+    r, g, b = rgb.getpixel((cx, cy))
+    assert r > 200 and g < 40 and b < 40
+
+
+@pytest.mark.raster
+@pytest.mark.unit
+def test_png_logo_svg_respeta_fill_heredado(tmp_path: Path) -> None:
+    pytest.importorskip("PIL")
+    from PIL import Image
+
+    logo = tmp_path / "logo.svg"
+    logo.write_text(
+        (
+            '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 40 40">'
+            '<g fill="#ff0000"><rect width="40" height="40"/></g>'
+            "</svg>"
+        ),
+        encoding="utf-8",
+    )
+    con = exportar(_sol(Perfil(nombre="t", logo_path=str(logo))), "png", px_modulo=8)
+    rgb = Image.open(BytesIO(con.datos)).convert("RGB")
+    cx, cy = rgb.size[0] // 2, rgb.size[1] // 2
+    r, g, b = rgb.getpixel((cx, cy))
+    assert r > 200 and g < 40 and b < 40
 
 
 @pytest.mark.raster

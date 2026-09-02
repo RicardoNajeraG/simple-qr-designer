@@ -26,9 +26,10 @@ uv run qr-designer
 # CLI
 uv run qr-designer --url "https://example.com" -o qr.svg
 uv run qr-designer --url "https://example.com" --preset Puntos -o qr.png --px 8
+uv run qr-designer --url "https://example.com" --logo marca.png -o qr.svg
 ```
 
-Flujo de la GUI: pegar URL o texto (también con el ratón) → el QR con el perfil por defecto ya está listo → elige formato (SVG/PNG/WEBP) → **Exportar imagen**. La vista previa usa el mismo raster que el export (píxeles enteros por módulo, sin márgenes extra) y la ventana no puede hacerse más pequeña que ese recuadro. El divisor entre opciones y preview se arrastra para agrandar el panel de opciones. Personalizar actualiza en vivo. Clic en el swatch o el hex de un color abre un selector propio (rueda + RGBA); el perfil guarda solo RGB opaco. **Guardar perfil** pide un nombre si el activo es de fábrica (crea un perfil de usuario) y confirma antes de sobrescribir uno de Mis perfiles; el perfil nunca incluye la URL.
+Flujo de la GUI: pegar URL o texto (también con el ratón) → el QR con el perfil por defecto ya está listo → elige formato (SVG/PNG/WEBP) → **Exportar imagen**. La vista previa usa el mismo raster que el export (píxeles enteros por módulo, sin márgenes extra) y la ventana no puede hacerse más pequeña que ese recuadro. El divisor entre opciones y preview se arrastra para agrandar el panel de opciones. Personalizar actualiza en vivo. Clic en el swatch o el hex de un color abre un selector propio (rueda + RGBA); el perfil guarda solo RGB opaco. **Guardar perfil** pide un nombre si el activo es de fábrica (crea un perfil de usuario) y confirma antes de sobrescribir uno de Mis perfiles; el perfil nunca incluye la URL. El **logotipo** (imagen centrada: PNG, JPEG, WEBP, GIF o SVG) sí se guarda como ruta en el perfil de usuario.
 
 Los parámetros técnicos (corrección de errores, píxeles por módulo) están en **Avanzado**, colapsado por defecto.
 
@@ -81,6 +82,12 @@ UPDATE_GOLDEN=1 uv run pytest tests/unit_tests/test_svg.py
 
 Marcadores: `unit`, `integration`, `raster` (Pillow), `decode` (zxing-cpp), `gui` (DISPLAY + tkinter).
 
+## Publicar una versión
+
+Al hacer push a `master` o `main` con un cambio de `version` en `pyproject.toml`, CI corre los tests y sube a [GitHub Releases](https://github.com/RicardoNajeraG/simple-qr-designer/releases) un `.exe` (Windows), un `.deb` (Linux) y un `.dmg` (macOS).
+
+La primera vez, o si quieres regenerar la versión actual sin subir el número: **Actions → Release → Run workflow** y marca `force`.
+
 ## Criterios de aceptación → tests
 
 | Criterio | Cómo se certifica |
@@ -96,7 +103,7 @@ Marcadores: `unit`, `integration`, `raster` (Pillow), `decode` (zxing-cpp), `gui
 | Advertencia de contraste no bloqueante | `test_rf08_advertencia_no_bloquea_export` |
 | Quiet zone intocable | `test_scene.py::test_marco_no_recorta_quiet_zone` |
 | Paleta PNG con colores reales | `test_png_paleta_colores_exactos` (estilo cuadrado) |
-| PNG con curvas nítido y escaneable | `test_png_curvas_*` (supersampling, decode ZXing) |
+| PNG con logo centrado sigue siendo escaneable | `test_roundtrip_con_logo_central`, `test_logo.py` (caja segura) |
 | Preview = mismo raster que export | `test_preview.py` |
 | PNG/WEBP no se guardan como SVG | `test_export_dialog.py` (`resolver_export`, `filetypes_para`) |
 | Diálogo de guardado muestra el formato elegido | `test_filetypes_png_primero` |
@@ -116,5 +123,6 @@ Lo único no automatizable. Antes de un release, imprimir o mostrar en pantalla 
 5. Marco «Escanéame» con texto largo truncado.
 6. PNG ~8 px/módulo y el mismo diseño en SVG abierto en el navegador.
 7. QR invertido (fondo negro, módulos blancos): confirmar que la UI advierte; no hace falta que todas las apps lo lean.
+8. Logotipo PNG o SVG en el centro (ECC efectiva H): escanear con 2 apps.
 
 Si un caso de estilo nuevo rompe el escaneo, añadirlo a `test_roundtrip.py` y, si hace falta, a la política de ECC recomendada en `config/contrast.py`.

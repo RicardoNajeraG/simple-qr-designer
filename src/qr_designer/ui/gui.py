@@ -12,7 +12,8 @@ from tkinter import filedialog, messagebox, simpledialog, ttk
 from qr_designer.config.models import Correccion, MarcoTipo, ModuloEstilo, OjoEstilo
 from qr_designer.config.presets import NOMBRES_PRESET
 from qr_designer.config.profiles import PerfilError, es_preset
-from qr_designer.export.paths import filetypes_para, resolver_export
+from qr_designer.export.paths import filetypes_logo, filetypes_para, resolver_export
+from qr_designer.logos import listar_logos
 from qr_designer.render.canvas import pintar_canvas
 from qr_designer.render.preview import px_para_preview
 from qr_designer.ui.acerca import VentanaAcerca
@@ -42,6 +43,8 @@ PREVIEW_PAD = 12
 SIDEBAR_ANCHO = 320
 COMBO_ANCHO = 16
 PAD = 16
+LOGO_MINI = 32
+LOGO_CATALOGO_COLS = 6
 HINT_CONTENIDO = "Pega una URL o escribe un texto"
 SWATCHES = (
     "#000000",
@@ -226,6 +229,25 @@ class _PanelDesplazable(ttk.Frame):
         else:
             self.canvas.yview_scroll(1, "units")
         return "break"
+
+
+def _miniatura_logo(path: Path, master: tk.Misc, lado: int = LOGO_MINI) -> tk.PhotoImage | None:
+    img = cargar_png(path, master=master)
+    if img is None:
+        return None
+    w, h = img.width(), img.height()
+    if w <= 0 or h <= 0:
+        return None
+    mayor = max(w, h)
+    if mayor > lado:
+        factor = max(1, mayor // lado)
+        if factor > 1:
+            img = img.subsample(factor, factor)
+    elif mayor < lado:
+        z = max(1, lado // mayor)
+        if z > 1:
+            img = img.zoom(z, z)
+    return img
 
 
 class QRDesignerApp:
@@ -454,6 +476,28 @@ class QRDesignerApp:
         ):
             self._fila_color(izq, campo, etiqueta)
 
+        ttk.Label(izq, text="Logotipo", style="Heading.TLabel").pack(anchor=tk.W, pady=(12, 4))
+        self.frm_logos_catalogo = ttk.Frame(izq)
+        self.frm_logos_catalogo.pack(fill=tk.X, pady=(0, 6))
+        self.btns_logo_catalogo: dict[str, ttk.Button] = {}
+        self.cajas_logo_catalogo: dict[str, CajaRedonda] = {}
+        self._fotos_logo_catalogo: list[tk.PhotoImage] = []
+        self._montar_catalogo_logos()
+        fila_logo = ttk.Frame(izq)
+        fila_logo.pack(fill=tk.X)
+        caja_elegir = CajaRedonda(fila_logo, fondo=BORDE, borde=BORDE)
+        self.btn_elegir_logo = ttk.Button(
+            caja_elegir, text="Elegir imagen", command=self._elegir_logo
+        )
+        caja_elegir.alojar(self.btn_elegir_logo)
+        caja_elegir.pack(side=tk.LEFT)
+        caja_quitar = CajaRedonda(fila_logo, fondo=BORDE, borde=BORDE)
+        self.btn_quitar_logo = ttk.Button(caja_quitar, text="Quitar", command=self._quitar_logo)
+        caja_quitar.alojar(self.btn_quitar_logo)
+        caja_quitar.pack(side=tk.LEFT, padx=(8, 0))
+        self.lbl_logo = ttk.Label(izq, text="Ninguno", style="Muted.TLabel")
+        self.lbl_logo.pack(anchor=tk.W, pady=(4, 0))
+
         self.lbl_aviso = ttk.Label(izq, text="", wraplength=280, style="Aviso.TLabel")
         self.lbl_aviso.pack(anchor=tk.W, pady=8)
 
@@ -642,6 +686,53 @@ class QRDesignerApp:
             self.vm.set_color(campo, self._colores[campo].get())
         except Exception as exc:
             self.var_estado.set(str(exc))
+
+    def _montar_catalogo_logos(self) -> None:
+        for i, entrada in enumerate(listar_logos()):
+            caja = CajaRedonda(self.frm_logos_catalogo, radio=6, borde=BORDE, fondo=SUPERFICIE)
+            img = _miniatura_logo(entrada.path, self.root)
+            kwargs: dict = {"padding": 0}
+            if img is not None:
+                self._fotos_logo_catalogo.append(img)
+                kwargs["image"] = img
+            else:
+                kwargs["text"] = entrada.id[:4]
+            btn = ttk.Button(
+                caja,
+                command=lambda lid=entrada.id: self._on_logo_catalogo(lid),
+                **kwargs,
+            )
+            caja.alojar(btn)
+            fila, col = divmod(i, LOGO_CATALOGO_COLS)
+            caja.grid(row=fila, column=col, padx=2, pady=2)
+            self.btns_logo_catalogo[entrada.id] = btn
+            self.cajas_logo_catalogo[entrada.id] = caja
+
+    def _on_logo_catalogo(self, ident: str) -> None:
+        self.vm.set_logo_catalogo(ident)
+
+    def _nombre_logo_catalogo(self, ident: str) -> str:
+        for entrada in listar_logos():
+            if entrada.id == ident:
+                return entrada.nombre
+        return ident
+
+    def _sync_cromo_catalogo(self) -> None:
+        activo = self.vm.perfil.logo_id
+        for lid, caja in self.cajas_logo_catalogo.items():
+            caja.set_borde(ACENTO if lid == activo else BORDE)
+
+    def _elegir_logo(self) -> None:
+        path = filedialog.askopenfilename(
+            parent=self.root,
+            title="Elegir logotipo",
+            filetypes=filetypes_logo(),
+        )
+        if path:
+            self.vm.set_logo(path)
+
+    def _quitar_logo(self) -> None:
+        self.vm.set_logo(None)
 
     def _abrir_selector(self, campo: str) -> None:
         if self.ventana_color is not None:
@@ -909,9 +1000,21 @@ class QRDesignerApp:
                 var.set(valor)
                 getattr(self, f"_sw_{campo}").config(bg=valor, activebackground=valor)
             self.lbl_activo.config(text=f"Activo: {self.vm.etiqueta_perfil}")
+            if p.logo_id:
+                self.lbl_logo.config(text=self._nombre_logo_catalogo(p.logo_id))
+                self.btn_quitar_logo.config(state=tk.NORMAL)
+            elif p.logo_path:
+                self.lbl_logo.config(text=Path(p.logo_path).name)
+                self.btn_quitar_logo.config(state=tk.NORMAL)
+            else:
+                self.lbl_logo.config(text="Ninguno")
+                self.btn_quitar_logo.config(state=tk.DISABLED)
+            self._sync_cromo_catalogo()
             self.lbl_aviso.config(text=self.vm.advertencia_contraste or "")
             sug = self.vm.ecc_recomendada
-            if sug != p.correccion.value and p.correccion.value != "auto":
+            if p.logo_id or p.logo_path:
+                self.lbl_ecc_sug.config(text="Con logotipo el QR se genera con corrección H")
+            elif sug != p.correccion.value and p.correccion.value != "auto":
                 self.lbl_ecc_sug.config(
                     text=f"Sugerida para lectura: {sug} (el preview no cambia)"
                 )

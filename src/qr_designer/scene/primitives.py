@@ -87,7 +87,27 @@ class Text:
         return ("text", self.id, self.x, self.y, self.text, self.font_size, self.anchor, self.role)
 
 
-Primitiva = Union[Rect, Circle, Path, Text]
+@dataclass(frozen=True)
+class Imagen:
+    id: str
+    x: float
+    y: float
+    w: float
+    h: float
+    ruta: str
+    role: str = "logo"
+
+    def __post_init__(self) -> None:
+        object.__setattr__(self, "x", _r(self.x))
+        object.__setattr__(self, "y", _r(self.y))
+        object.__setattr__(self, "w", _r(self.w))
+        object.__setattr__(self, "h", _r(self.h))
+
+    def geometry(self) -> tuple:
+        return ("imagen", self.id, self.x, self.y, self.w, self.h, self.role)
+
+
+Primitiva = Union[Rect, Circle, Path, Text, Imagen]
 
 
 @dataclass(frozen=True)

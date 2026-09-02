@@ -3,11 +3,14 @@
 from __future__ import annotations
 
 from io import BytesIO
+from pathlib import Path as FsPath
+from xml.etree.ElementTree import ParseError
 
 from PIL import Image, ImageDraw, ImageFont
 
 from qr_designer.config.models import hex_a_rgb
-from qr_designer.scene.primitives import Circle, Escena, Path, Rect, Text
+from qr_designer.scene.logo import ajustar_contain, dimensiones_svg
+from qr_designer.scene.primitives import Circle, Escena, Imagen, Path, Rect, Text
 
 FACTOR_SUPERSAMPLE = 4
 MAX_INTERMEDIO = 8192
@@ -24,6 +27,10 @@ def escena_tiene_curvas(escena: Escena) -> bool:
         if isinstance(item, Rect) and (item.rx or item.ry):
             return True
     return False
+
+
+def escena_tiene_logo(escena: Escena) -> bool:
+    return any(isinstance(item, Imagen) for item in escena.items)
 
 
 def factor_supersample(ancho: int, alto: int, factor: int = FACTOR_SUPERSAMPLE) -> int:
@@ -44,6 +51,8 @@ def _dibujar(escena: Escena, ancho: int, alto: int) -> tuple[Image.Image, set[tu
         return round(x * sx), round(y * sy)
 
     for item in escena.items:
+        if isinstance(item, Imagen):
+            continue
         fill = _color(item.fill)
         usados.add(fill)
         if isinstance(item, Rect):
@@ -83,21 +92,67 @@ def _dibujar(escena: Escena, ancho: int, alto: int) -> tuple[Image.Image, set[tu
     return img, usados
 
 
+def _dimensiones_logo(ruta: str) -> tuple[float, float]:
+    path = FsPath(ruta)
+    if path.suffix.lower() == ".svg":
+        return dimensiones_svg(path.read_bytes())
+    with Image.open(path) as im:
+        return float(im.width), float(im.height)
+
+
+def _logo_rgba(ruta: str, dw: int, dh: int) -> Image.Image:
+    path = FsPath(ruta)
+    if path.suffix.lower() == ".svg":
+        from qr_designer.export.svg_raster import svg_a_rgba
+
+        return svg_a_rgba(path, dw, dh)
+    logo = Image.open(path).convert("RGBA")
+    return logo.resize((dw, dh), Image.Resampling.LANCZOS)
+
+
+def _pegar_logos(escena: Escena, img: Image.Image, ancho: int, alto: int) -> Image.Image:
+    sx, sy = ancho / escena.width, alto / escena.height
+    out = img.convert("RGBA")
+    for item in escena.items:
+        if not isinstance(item, Imagen):
+            continue
+        try:
+            iw, ih = _dimensiones_logo(item.ruta)
+            fit = ajustar_contain((item.x, item.y, item.w, item.h), iw, ih)
+            dw = max(1, round(fit[2] * sx))
+            dh = max(1, round(fit[3] * sy))
+            logo = _logo_rgba(item.ruta, dw, dh)
+        except (OSError, ValueError, ParseError):
+            continue
+        px = round(fit[0] * sx)
+        py = round(fit[1] * sy)
+        capa = Image.new("RGBA", out.size, (0, 0, 0, 0))
+        capa.paste(logo, (px, py), logo)
+        out = Image.alpha_composite(out, capa)
+    return out.convert("RGB")
+
+
 def rasterizar(escena: Escena, ancho: int, alto: int, formato: str) -> bytes:
     curvas = escena_tiene_curvas(escena)
+    con_logo = escena_tiene_logo(escena)
     factor = factor_supersample(ancho, alto) if curvas else 1
     img, usados = _dibujar(escena, ancho * factor, alto * factor)
     if factor > 1:
         img = img.resize((ancho, alto), Image.Resampling.LANCZOS)
+    if con_logo:
+        img = _pegar_logos(escena, img, ancho, alto)
 
     formato = formato.lower()
     buf = BytesIO()
     if formato == "png":
-        if curvas:
+        if con_logo:
+            img.save(buf, format="PNG", optimize=True, compress_level=9)
+        elif curvas:
             paletada = img.quantize(colors=64, dither=Image.Dither.NONE)
+            paletada.save(buf, format="PNG", optimize=True, compress_level=9)
         else:
             paletada = _a_paleta(img, usados)
-        paletada.save(buf, format="PNG", optimize=True, compress_level=9)
+            paletada.save(buf, format="PNG", optimize=True, compress_level=9)
     elif formato == "webp":
         img.save(buf, format="WEBP", lossless=True, quality=100, method=4)
     else:

@@ -91,6 +91,52 @@ def test_profile_service_duplicar(tmp_path: Path) -> None:
 
 
 @pytest.mark.unit
+def test_listar_logos_dicts(monkeypatch) -> None:
+    from qr_designer.logos import EntradaLogo
+    from qr_designer.service.qr_service import listar_logos
+
+    entradas = [
+        EntradaLogo(id="wifi", nombre="wifi", filename="wifi.png", path=Path("wifi.png")),
+        EntradaLogo(id="web", nombre="web", filename="web.png", path=Path("web.png")),
+    ]
+    monkeypatch.setattr("qr_designer.logos.listar_logos", lambda raiz=None: entradas)
+    out = listar_logos()
+    assert out == [{"id": "wifi", "nombre": "wifi"}, {"id": "web", "nombre": "web"}]
+
+
+@pytest.mark.unit
+def test_exportar_qr_con_logo_id(tmp_path: Path, monkeypatch) -> None:
+    from qr_designer.logos import LogoDesconocido
+    from tests.png_bytes import escribir_png
+
+    ruta = escribir_png(tmp_path / "wifi.png")
+
+    def _resolver(ident: str, raiz=None):
+        if ident == "wifi":
+            return ruta
+        raise LogoDesconocido(ident)
+
+    monkeypatch.setattr("qr_designer.logos.resolver_logo", _resolver)
+    d = perfil_a_dict(Perfil(nombre="t", logo_id="wifi"))
+    out = exportar_qr("hola logo", d, "svg")
+    svg = out["datos"].decode("utf-8")
+    assert "<image" in svg
+    assert "data:image" in svg
+
+
+@pytest.mark.unit
+def test_exportar_qr_con_logo_path(tmp_path: Path) -> None:
+    from tests.png_bytes import escribir_png
+
+    ruta = escribir_png(tmp_path / "logo.png")
+    d = perfil_a_dict(Perfil(nombre="t", logo_path=str(ruta)))
+    out = exportar_qr("hola logo", d, "svg")
+    svg = out["datos"].decode("utf-8")
+    assert "<image" in svg
+    assert "data:image" in svg
+
+
+@pytest.mark.unit
 def test_import_service_no_carga_pillow_ni_tkinter() -> None:
     codigo = (
         "import sys\n"

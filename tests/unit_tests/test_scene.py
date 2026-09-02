@@ -20,7 +20,7 @@ from qr_designer.scene.builders import (
     celdas_tinta_modulo,
     construir_escena,
 )
-from qr_designer.scene.primitives import Circle, Path, Rect, Text
+from qr_designer.scene.primitives import Circle, Imagen, Path, Rect, Text
 
 
 def _perfil(**kwargs) -> Perfil:
@@ -211,3 +211,87 @@ def test_matriz_minima_version_1() -> None:
     assert escena.module_count == 21
     assert len(escena.por_rol("ojo")) == 3
     assert len(escena.por_rol("pupila")) == 3
+    assert escena.por_rol("logo") == ()
+    assert escena.por_rol("logo_fondo") == ()
+
+
+@pytest.mark.unit
+def test_escena_con_logo_centrado_en_matriz(tmp_path) -> None:
+    from tests.png_bytes import escribir_png
+
+    ruta = escribir_png(tmp_path / "logo.png", 8, 8)
+    escena, matriz, _ = _escena("HI", logo_path=str(ruta))
+    fondos = escena.por_rol("logo_fondo")
+    logos = escena.por_rol("logo")
+    assert len(fondos) == 1 and len(logos) == 1
+    assert isinstance(fondos[0], Rect)
+    assert isinstance(logos[0], Imagen)
+    ox, oy = escena.origen_qr
+    n = matriz.size
+    item = logos[0]
+    assert item.x >= ox + 8 - 1e-6
+    assert item.y >= oy + 8 - 1e-6
+    assert item.x + item.w <= ox + n - 8 + 1e-6
+    assert item.y + item.h <= oy + n + 1e-6
+    assert item.x + item.w / 2 == pytest.approx(ox + n / 2)
+    assert item.ruta == str(ruta)
+
+
+@pytest.mark.unit
+def test_logo_inexistente_no_rompe_escena() -> None:
+    escena, _, _ = _escena("HI", logo_path="/no/existe/marca.png")
+    assert escena.por_rol("logo") == ()
+    assert escena.por_rol("logo_fondo") == ()
+
+
+@pytest.mark.unit
+def test_escena_con_logo_id_de_catalogo(tmp_path, monkeypatch) -> None:
+    from qr_designer.logos import LogoDesconocido
+    from tests.png_bytes import escribir_png
+
+    ruta = escribir_png(tmp_path / "wifi.png", 8, 8)
+
+    def _resolver(ident: str, raiz=None):
+        if ident == "wifi":
+            return ruta
+        raise LogoDesconocido(ident)
+
+    monkeypatch.setattr("qr_designer.logos.resolver_logo", _resolver)
+    escena, _, _ = _escena("HI", logo_id="wifi")
+    logos = escena.por_rol("logo")
+    assert len(logos) == 1
+    assert isinstance(logos[0], Imagen)
+    assert logos[0].ruta == str(ruta)
+
+
+@pytest.mark.unit
+def test_logo_id_gana_sobre_logo_path(tmp_path, monkeypatch) -> None:
+    from qr_designer.logos import LogoDesconocido
+    from tests.png_bytes import escribir_png
+
+    catalogo = escribir_png(tmp_path / "wifi.png", 8, 8)
+    extra = escribir_png(tmp_path / "otro.png", 8, 8)
+
+    def _resolver(ident: str, raiz=None):
+        if ident == "wifi":
+            return catalogo
+        raise LogoDesconocido(ident)
+
+    monkeypatch.setattr("qr_designer.logos.resolver_logo", _resolver)
+    escena, _, _ = _escena("HI", logo_id="wifi", logo_path=str(extra))
+    assert escena.por_rol("logo")[0].ruta == str(catalogo)
+
+
+@pytest.mark.unit
+def test_logo_id_desconocido_no_usa_path(tmp_path, monkeypatch) -> None:
+    from qr_designer.logos import LogoDesconocido
+    from tests.png_bytes import escribir_png
+
+    extra = escribir_png(tmp_path / "otro.png", 8, 8)
+
+    def _resolver(ident: str, raiz=None):
+        raise LogoDesconocido(ident)
+
+    monkeypatch.setattr("qr_designer.logos.resolver_logo", _resolver)
+    escena, _, _ = _escena("HI", logo_id="nope", logo_path=str(extra))
+    assert escena.por_rol("logo") == ()

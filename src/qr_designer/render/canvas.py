@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 from qr_designer.render.preview import PREVIEW_MAX_LADO, px_para_preview
-from qr_designer.scene.primitives import Circle, Escena, Path, Rect, Text
+from qr_designer.scene.primitives import Circle, Escena, Imagen, Path, Rect, Text
 
 
 def escala_preview(escena: Escena, max_lado: float = PREVIEW_MAX_LADO) -> float:
@@ -71,6 +71,8 @@ def pintar_canvas(
                 anchor="center",
                 tags=tags,
             )
+        elif isinstance(item, Imagen):
+            continue
     return scale
 
 

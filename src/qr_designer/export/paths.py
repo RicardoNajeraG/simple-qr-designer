@@ -22,6 +22,14 @@ def resolver_export(path_elegido: str | Path, formato_elegido: str) -> tuple[Pat
     return path.with_suffix(f".{fmt}"), fmt
 
 
+def filetypes_logo() -> list[tuple[str, str]]:
+    """Filtros del diálogo para elegir logotipo."""
+    return [
+        ("Imágenes", "*.png *.jpg *.jpeg *.webp *.gif *.svg"),
+        ("Todos los archivos", "*.*"),
+    ]
+
+
 def filetypes_para(formato: str) -> list[tuple[str, str]]:
     """Filtros del diálogo de guardado, con el formato elegido primero."""
     fmt = _normalizar_formato(formato)

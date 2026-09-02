@@ -51,6 +51,31 @@ def test_svg_tiene_viewbox_y_va_minificado() -> None:
 
 
 @pytest.mark.unit
+def test_svg_embebe_logo_como_data_uri(tmp_path: Path) -> None:
+    from tests.png_bytes import escribir_png
+
+    ruta = escribir_png(tmp_path / "logo.png", 4, 4)
+    perfil = Perfil(nombre="c", logo_path=str(ruta))
+    svg = _svg_para("logo", perfil)
+    assert "<image" in svg
+    assert "data:image/png;base64," in svg
+    assert "preserveAspectRatio=" in svg
+
+
+@pytest.mark.unit
+def test_svg_anida_logo_svg_vectorial(tmp_path: Path) -> None:
+    from tests.png_bytes import escribir_svg_rect
+
+    ruta = escribir_svg_rect(tmp_path / "logo.svg", fill="#00aa44")
+    perfil = Perfil(nombre="c", logo_path=str(ruta))
+    svg = _svg_para("logo", perfil)
+    assert "data:image/svg+xml" not in svg
+    assert svg.lower().count("<svg") == 1
+    assert 'fill="#00aa44"' in svg
+    assert "<g transform=" in svg
+
+
+@pytest.mark.unit
 def test_svg_coordenadas_redondeadas() -> None:
     svg = _svg_para("tmp", Perfil(nombre="c", modulo_estilo=ModuloEstilo.PUNTOS))
     import re

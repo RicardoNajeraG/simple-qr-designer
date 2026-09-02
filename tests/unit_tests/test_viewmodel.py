@@ -164,3 +164,77 @@ def test_eliminar_otro_usuario_no_cambia_el_activo(vm: ViewModel) -> None:
     vm.eliminar_perfil("Otra")
     assert vm.perfil_origen == "Mia"
     assert vm.etiqueta_perfil == "Mia"
+
+
+@pytest.mark.unit
+def test_set_logo_marca_modificado_y_se_guarda(vm: ViewModel, tmp_path: Path) -> None:
+    logo = tmp_path / "marca.png"
+    logo.write_bytes(b"x")
+    vm.set_url("https://example.com")
+    vm.set_logo(str(logo))
+    _flush(vm)
+    assert vm.modificado
+    assert vm.perfil.logo_path == str(logo)
+    vm.guardar_perfil("Mia")
+    assert vm.gestor.obtener("Mia").logo_path == str(logo)
+    assert not vm.modificado
+    vm.aplicar_perfil("Clásico")
+    _flush(vm)
+    assert vm.perfil.logo_path is None
+    assert vm.etiqueta_perfil == "Clásico"
+
+
+@pytest.mark.unit
+def test_set_logo_vacio_quita(vm: ViewModel, tmp_path: Path) -> None:
+    logo = tmp_path / "marca.png"
+    logo.write_bytes(b"x")
+    vm.set_logo(str(logo))
+    _flush(vm)
+    vm.set_logo(None)
+    _flush(vm)
+    assert vm.perfil.logo_path is None
+    assert vm.perfil.logo_id is None
+    assert vm.modificado
+
+
+@pytest.mark.unit
+def test_set_logo_catalogo_limpia_path_y_al_reves(vm: ViewModel, tmp_path: Path, monkeypatch) -> None:
+    from qr_designer.logos import LogoDesconocido
+    from tests.png_bytes import escribir_png
+
+    cat = tmp_path / "cat"
+    cat.mkdir()
+    wifi = escribir_png(cat / "wifi.png", 8, 8)
+    web = escribir_png(cat / "web.png", 8, 8)
+
+    def _resolver(ident: str, raiz=None):
+        mapa = {"wifi": wifi, "web": web}
+        path = mapa.get(ident)
+        if path is None:
+            raise LogoDesconocido(ident)
+        return path
+
+    monkeypatch.setattr("qr_designer.logos.resolver_logo", _resolver)
+    vm.set_url("https://example.com")
+    vm.set_logo_catalogo("wifi")
+    assert vm.perfil.logo_id == "wifi"
+    assert vm.perfil.logo_path is None
+    assert vm.escena is not None
+    assert vm.escena.por_rol("logo")
+    assert Path(vm.escena.por_rol("logo")[0].ruta).name == "wifi.png"
+
+    vm.set_logo_catalogo("web")
+    assert vm.perfil.logo_id == "web"
+    assert Path(vm.escena.por_rol("logo")[0].ruta).name == "web.png"
+
+    propio = tmp_path / "mio.png"
+    propio.write_bytes(b"x")
+    vm.set_logo(str(propio))
+    assert vm.perfil.logo_id is None
+    assert vm.perfil.logo_path == str(propio)
+
+    vm.set_logo_catalogo("wifi")
+    vm.set_logo(None)
+    assert vm.perfil.logo_id is None
+    assert vm.perfil.logo_path is None
+    assert vm.escena.por_rol("logo") == ()

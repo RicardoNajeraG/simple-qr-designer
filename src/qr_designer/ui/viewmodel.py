@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 from collections.abc import Callable
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 from typing import Protocol
 
 from qr_designer.config.models import (
@@ -124,16 +124,7 @@ class ViewModel:
 
     def guardar_perfil(self, nombre: str | None = None, overwrite: bool = False) -> None:
         destino = (nombre or self.perfil.nombre).strip()
-        perfil = Perfil(
-            nombre=destino,
-            modulo_estilo=self.perfil.modulo_estilo,
-            ojo_estilo=self.perfil.ojo_estilo,
-            marco_tipo=self.perfil.marco_tipo,
-            marco_texto=self.perfil.marco_texto,
-            correccion=self.perfil.correccion,
-            colores=self.perfil.colores,
-            quiet_zone=self.perfil.quiet_zone,
-        )
+        perfil = replace(self.perfil, nombre=destino)
         self.gestor.guardar(perfil, overwrite=overwrite)
         self.perfil = perfil
         self.perfil_origen = destino
@@ -178,6 +169,18 @@ class ViewModel:
             raise ValueError(f"Campo de color desconocido: {campo}")
         actual[campo] = valor
         self._touch(Perfil(**{**self.perfil.to_dict(), "colores": ColorScheme.from_dict(actual)}))
+
+    def set_logo(self, ruta: str | None) -> None:
+        path = None if ruta is None else (str(ruta).strip() or None)
+        self.perfil = replace(self.perfil, logo_path=path, logo_id=None)
+        self.modificado = True
+        self._rebuild()
+
+    def set_logo_catalogo(self, ident: str) -> None:
+        clave = str(ident).strip()
+        self.perfil = replace(self.perfil, logo_id=clave or None, logo_path=None)
+        self.modificado = True
+        self._rebuild()
 
     def exportar(self, formato: str, px_modulo: int | None = None):
         if not self.puede_exportar:
