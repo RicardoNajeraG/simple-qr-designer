@@ -7,16 +7,17 @@ import queue
 import threading
 import tkinter as tk
 from pathlib import Path
-from tkinter import filedialog, messagebox, ttk
+from tkinter import filedialog, messagebox, simpledialog, ttk
 
 from qr_designer.config.models import Correccion, MarcoTipo, ModuloEstilo, OjoEstilo
+from qr_designer.config.presets import NOMBRES_PRESET
 from qr_designer.config.profiles import PerfilError, es_preset
 from qr_designer.export.paths import filetypes_para, resolver_export
 from qr_designer.render.canvas import pintar_canvas
 from qr_designer.render.preview import px_para_preview
 from qr_designer.ui.acerca import VentanaAcerca
 from qr_designer.ui.color_picker import SelectorColor
-from qr_designer.ui.perfiles_dialog import DialogoPerfiles
+from qr_designer.ui.perfiles_dialog import DialogoPerfiles, nombre_libre_propuesto
 from qr_designer.ui.theme import (
     ACENTO,
     AYUDA_ICONO,
@@ -723,23 +724,38 @@ class QRDesignerApp:
             self._silencio = silencio
 
     def _puede_guardar(self) -> bool:
-        return self.vm.modificado and not es_preset(self.vm.perfil_origen)
+        return self.vm.modificado
 
     def _guardar(self) -> None:
         if not self._puede_guardar():
             return
-        nombre = self.vm.perfil_origen
-        if not messagebox.askyesno(
-            "Guardar perfil",
-            f"¿Guardar la configuración actual en «{nombre}»?",
-            parent=self.root,
-        ):
-            return
         try:
-            self.vm.guardar_perfil(nombre, overwrite=True)
+            if es_preset(self.vm.perfil_origen):
+                ocupados = set(NOMBRES_PRESET)
+                ocupados.update(p.nombre for p in self.vm.gestor.listar())
+                propuesto = nombre_libre_propuesto("Nuevo perfil", ocupados)
+                nombre = simpledialog.askstring(
+                    "Guardar perfil",
+                    "Nombre del nuevo perfil:",
+                    initialvalue=propuesto,
+                    parent=self.root,
+                )
+                if not nombre or not str(nombre).strip():
+                    return
+                destino = str(nombre).strip()
+                self.vm.guardar_perfil(destino, overwrite=False)
+            else:
+                destino = self.vm.perfil_origen
+                if not messagebox.askyesno(
+                    "Guardar perfil",
+                    f"¿Guardar la configuración actual en «{destino}»?",
+                    parent=self.root,
+                ):
+                    return
+                self.vm.guardar_perfil(destino, overwrite=True)
             self._refrescar_perfiles()
             self._sync()
-            self.var_estado.set(f"Perfil «{nombre}» guardado")
+            self.var_estado.set(f"Perfil «{destino}» guardado")
         except PerfilError as exc:
             messagebox.showerror("Perfil", str(exc), parent=self.root)
 

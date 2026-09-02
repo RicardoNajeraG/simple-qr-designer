@@ -28,7 +28,7 @@ uv run qr-designer --url "https://example.com" -o qr.svg
 uv run qr-designer --url "https://example.com" --preset Puntos -o qr.png --px 8
 ```
 
-Flujo de la GUI: pegar URL o texto (también con el ratón) → el QR con el perfil por defecto ya está listo → elige formato (SVG/PNG/WEBP) → **Exportar imagen**. La vista previa usa el mismo raster que el export (píxeles enteros por módulo, sin márgenes extra) y la ventana no puede hacerse más pequeña que ese recuadro. El divisor entre opciones y preview se arrastra para agrandar el panel de opciones. Personalizar actualiza en vivo. Clic en el swatch o el hex de un color abre un selector propio (rueda + RGBA); el perfil guarda solo RGB opaco. **Guardar perfil** confirma y escribe encima del perfil de usuario activo (los de fábrica no se sobrescriben); el perfil nunca incluye la URL.
+Flujo de la GUI: pegar URL o texto (también con el ratón) → el QR con el perfil por defecto ya está listo → elige formato (SVG/PNG/WEBP) → **Exportar imagen**. La vista previa usa el mismo raster que el export (píxeles enteros por módulo, sin márgenes extra) y la ventana no puede hacerse más pequeña que ese recuadro. El divisor entre opciones y preview se arrastra para agrandar el panel de opciones. Personalizar actualiza en vivo. Clic en el swatch o el hex de un color abre un selector propio (rueda + RGBA); el perfil guarda solo RGB opaco. **Guardar perfil** pide un nombre si el activo es de fábrica (crea un perfil de usuario) y confirma antes de sobrescribir uno de Mis perfiles; el perfil nunca incluye la URL.
 
 Los parámetros técnicos (corrección de errores, píxeles por módulo) están en **Avanzado**, colapsado por defecto.
 

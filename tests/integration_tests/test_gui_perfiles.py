@@ -255,3 +255,69 @@ def test_guardar_perfil_confirma_overwrite_usuario(tmp_path, monkeypatch) -> Non
         assert str(app.btn_guardar_perfil.cget("state")) == "disabled"
     finally:
         root.destroy()
+
+
+@pytest.mark.gui
+@pytest.mark.integration
+def test_guardar_preset_modificado_pide_nombre(tmp_path, monkeypatch) -> None:
+    if not os.environ.get("DISPLAY"):
+        pytest.skip("sin DISPLAY")
+
+    from qr_designer.config.models import ModuloEstilo
+    from qr_designer.config.presets import preset_clasico
+
+    _tk, root, app = _arrancar(tmp_path)
+    try:
+        assert app.vm.perfil_origen == "Clásico"
+        assert str(app.btn_guardar_perfil.cget("state")) == "disabled"
+
+        app.vm.set_modulo(ModuloEstilo.PUNTOS)
+        app._sync()
+        root.update()
+        assert str(app.btn_guardar_perfil.cget("state")) == "normal"
+
+        def no_yesno(*_a, **_k):
+            raise AssertionError("askyesno no debe llamarse al guardar un preset")
+
+        monkeypatch.setattr("qr_designer.ui.gui.messagebox.askyesno", no_yesno)
+        monkeypatch.setattr(
+            "qr_designer.ui.gui.simpledialog.askstring",
+            lambda *_a, **_k: "Mia",
+        )
+        app.btn_guardar_perfil.invoke()
+        root.update()
+        assert app.vm.perfil_origen == "Mia"
+        assert not app.vm.modificado
+        mia = app.vm.gestor.obtener("Mia")
+        assert mia.modulo_estilo is ModuloEstilo.PUNTOS
+        assert mia.modulo_estilo is not preset_clasico().modulo_estilo
+        assert "Mia" in app.combo_perfil.cget("values")
+        assert str(app.btn_guardar_perfil.cget("state")) == "disabled"
+    finally:
+        root.destroy()
+
+
+@pytest.mark.gui
+@pytest.mark.integration
+def test_guardar_preset_cancelar_no_escribe(tmp_path, monkeypatch) -> None:
+    if not os.environ.get("DISPLAY"):
+        pytest.skip("sin DISPLAY")
+
+    from qr_designer.config.models import ModuloEstilo
+
+    _tk, root, app = _arrancar(tmp_path)
+    try:
+        app.vm.set_modulo(ModuloEstilo.PUNTOS)
+        app._sync()
+        root.update()
+        monkeypatch.setattr(
+            "qr_designer.ui.gui.simpledialog.askstring",
+            lambda *_a, **_k: None,
+        )
+        app.btn_guardar_perfil.invoke()
+        root.update()
+        assert app.vm.modificado
+        assert app.vm.perfil_origen == "Clásico"
+        assert app.vm.gestor.listar() == []
+    finally:
+        root.destroy()
