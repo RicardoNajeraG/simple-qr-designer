@@ -185,3 +185,34 @@ def test_preset_colado_en_json_se_ignora(gestor: GestorPerfiles) -> None:
     assert gestor.obtener("Clásico") == preset_clasico()
     assert gestor.obtener("Clásico").modulo_estilo is not ModuloEstilo.PUNTOS
     assert all(p.nombre not in NOMBRES_PRESET for p in gestor.listar())
+
+
+@pytest.mark.unit
+def test_duplicar_clasico_crea_usuario_sin_tocar_preset(gestor: GestorPerfiles) -> None:
+    copia = gestor.duplicar("Clásico", "Mia")
+    assert copia.nombre == "Mia"
+    assert copia.modulo_estilo is preset_clasico().modulo_estilo
+    assert gestor.obtener("Clásico") == preset_clasico()
+    assert [p.nombre for p in gestor.listar()] == ["Mia"]
+
+
+@pytest.mark.unit
+def test_duplicar_a_nombre_de_preset_falla(gestor: GestorPerfiles) -> None:
+    with pytest.raises(PerfilProtegido):
+        gestor.duplicar("Puntos", "Clásico")
+
+
+@pytest.mark.unit
+def test_duplicar_a_nombre_existente_falla(gestor: GestorPerfiles) -> None:
+    gestor.guardar(Perfil(nombre="Mia"))
+    with pytest.raises(PerfilYaExiste):
+        gestor.duplicar("Clásico", "Mia")
+
+
+@pytest.mark.unit
+def test_es_preset() -> None:
+    from qr_designer.config.profiles import es_preset
+
+    assert es_preset("Clásico")
+    assert es_preset("Puntos")
+    assert not es_preset("Mia")

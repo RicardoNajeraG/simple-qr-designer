@@ -82,6 +82,15 @@ def test_profile_service_crud_dict(tmp_path: Path) -> None:
 
 
 @pytest.mark.unit
+def test_profile_service_duplicar(tmp_path: Path) -> None:
+    svc = ProfileService(tmp_path / "profiles.json")
+    copia = svc.duplicar("Clásico", "Mia")
+    assert copia["nombre"] == "Mia"
+    assert copia["modulo_estilo"] == "cuadrado"
+    assert svc.obtener("Clásico")["nombre"] == "Clásico"
+
+
+@pytest.mark.unit
 def test_import_service_no_carga_pillow_ni_tkinter() -> None:
     codigo = (
         "import sys\n"

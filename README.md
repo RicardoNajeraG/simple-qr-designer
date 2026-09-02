@@ -28,7 +28,7 @@ uv run qr-designer --url "https://example.com" -o qr.svg
 uv run qr-designer --url "https://example.com" --preset Puntos -o qr.png --px 8
 ```
 
-Flujo de la GUI: pegar URL o texto (también con el ratón) → el QR con el perfil por defecto ya está listo → elige formato (SVG/PNG/WEBP) → **Exportar imagen**. La vista previa usa el mismo raster que el export (píxeles enteros por módulo, sin márgenes extra) y la ventana no puede hacerse más pequeña que ese recuadro. El divisor entre opciones y preview se arrastra para agrandar el panel de opciones. Personalizar actualiza en vivo. **Guardar perfil** es otra acción; el perfil nunca incluye la URL.
+Flujo de la GUI: pegar URL o texto (también con el ratón) → el QR con el perfil por defecto ya está listo → elige formato (SVG/PNG/WEBP) → **Exportar imagen**. La vista previa usa el mismo raster que el export (píxeles enteros por módulo, sin márgenes extra) y la ventana no puede hacerse más pequeña que ese recuadro. El divisor entre opciones y preview se arrastra para agrandar el panel de opciones. Personalizar actualiza en vivo. **Guardar perfil** confirma y escribe encima del perfil de usuario activo (los de fábrica no se sobrescriben); el perfil nunca incluye la URL.
 
 Los parámetros técnicos (corrección de errores, píxeles por módulo) están en **Avanzado**, colapsado por defecto.
 
@@ -48,7 +48,13 @@ El raster **no** pasa por SVG. Estilos con curvas se supersamplean (y se reducen
 
 El ícono de ventana es el mapache en PNG preescalados (`qr-designer-icon-32/64/256.png`). La cabecera usa `qr-designer-pet` y el banner ilustrado (sin texto «QR Designer»). La UI usa **Nunito** empaquetada (SIL OFL 1.1, TTF estáticos Regular/Bold) registrada en el proceso; si el registro falla, se cae a Segoe UI / SF Pro Text / Ubuntu. `tk scaling` se ajusta al DPI. Fondo blanco (`#ffffff`) como las ilustraciones.
 
-Perfiles de usuario: `~/.qr_designer/profiles.json` (schema versionado, escritura atómica). Los 5 presets de fábrica son de solo lectura.
+Perfiles de usuario (schema versionado, escritura atómica). Los 5 presets de fábrica son de solo lectura. `profiles.json` vive en:
+
+- Linux: `~/.qr_designer/profiles.json`
+- macOS: `~/Library/Application Support/QR Designer/profiles.json`
+- Windows: `%APPDATA%/QR Designer/profiles.json` (si no hay `APPDATA`, `~/AppData/Roaming/QR Designer/profiles.json`)
+
+Si ya existía el archivo legado `~/.qr_designer/profiles.json` y aún no hay canónico, se copia una vez; el legado no se borra.
 
 ### Backend futuro
 

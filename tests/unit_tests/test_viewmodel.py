@@ -120,3 +120,47 @@ def test_aplicar_perfil_resetea_modificado(vm: ViewModel) -> None:
     assert not vm.modificado
     assert vm.perfil.marco_tipo is MarcoTipo.NINGUNO
     assert vm.etiqueta_perfil == "Clásico"
+
+
+@pytest.mark.unit
+def test_duplicar_preset_crea_usuario(vm: ViewModel) -> None:
+    copia = vm.gestor.duplicar("Clásico", "Mia")
+    assert copia.nombre == "Mia"
+    assert copia.modulo_estilo is preset_clasico().modulo_estilo
+    assert vm.gestor.obtener("Clásico") == preset_clasico()
+    assert [p.nombre for p in vm.gestor.listar()] == ["Mia"]
+
+
+@pytest.mark.unit
+def test_duplicar_perfil_no_cambia_origen_activo(vm: ViewModel) -> None:
+    origen = vm.perfil_origen
+    copia = vm.duplicar_perfil("Clásico", "Mia")
+    assert copia.nombre == "Mia"
+    assert copia.modulo_estilo is preset_clasico().modulo_estilo
+    assert copia.ojo_estilo is preset_clasico().ojo_estilo
+    assert vm.perfil_origen == origen
+    assert vm.etiqueta_perfil == "Clásico"
+
+
+@pytest.mark.unit
+def test_eliminar_perfil_activo_vuelve_a_clasico(vm: ViewModel) -> None:
+    vm.guardar_perfil("Mia")
+    assert vm.perfil_origen == "Mia"
+    vm.set_modulo(ModuloEstilo.PUNTOS)
+    _flush(vm)
+    assert vm.modificado
+    vm.eliminar_perfil("Mia")
+    _flush(vm)
+    assert vm.perfil_origen == "Clásico"
+    assert vm.etiqueta_perfil == "Clásico"
+    assert not vm.modificado
+    assert vm.gestor.listar() == []
+
+
+@pytest.mark.unit
+def test_eliminar_otro_usuario_no_cambia_el_activo(vm: ViewModel) -> None:
+    vm.guardar_perfil("Mia")
+    vm.gestor.guardar(vm.perfil.__class__(**{**vm.perfil.to_dict(), "nombre": "Otra"}))
+    vm.eliminar_perfil("Otra")
+    assert vm.perfil_origen == "Mia"
+    assert vm.etiqueta_perfil == "Mia"

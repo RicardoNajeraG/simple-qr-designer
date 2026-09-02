@@ -139,6 +139,24 @@ class ViewModel:
         self.perfil_origen = destino
         self.modificado = False
 
+    def duplicar_perfil(self, origen: str, nuevo: str) -> Perfil:
+        return self.gestor.duplicar(origen, nuevo)
+
+    def renombrar_perfil(self, viejo: str, nuevo: str) -> None:
+        self.gestor.renombrar(viejo, nuevo)
+        if self.perfil_origen != viejo:
+            return
+        self.perfil_origen = nuevo
+        datos = self.perfil.to_dict()
+        datos["nombre"] = nuevo
+        self.perfil = Perfil.from_dict(datos)
+
+    def eliminar_perfil(self, nombre: str) -> None:
+        activo = self.perfil_origen == nombre
+        self.gestor.eliminar(nombre)
+        if activo:
+            self.aplicar_perfil("Clásico")
+
     def set_modulo(self, estilo: ModuloEstilo) -> None:
         self._touch(self.perfil.__class__(**{**self.perfil.to_dict(), "modulo_estilo": estilo}))
 

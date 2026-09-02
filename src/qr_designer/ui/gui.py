@@ -7,14 +7,15 @@ import queue
 import threading
 import tkinter as tk
 from pathlib import Path
-from tkinter import colorchooser, filedialog, messagebox, simpledialog, ttk
+from tkinter import colorchooser, filedialog, messagebox, ttk
 
 from qr_designer.config.models import Correccion, MarcoTipo, ModuloEstilo, OjoEstilo
-from qr_designer.config.profiles import PerfilError
+from qr_designer.config.profiles import PerfilError, es_preset
 from qr_designer.export.paths import filetypes_para, resolver_export
 from qr_designer.render.canvas import pintar_canvas
 from qr_designer.render.preview import px_para_preview
 from qr_designer.ui.acerca import VentanaAcerca
+from qr_designer.ui.perfiles_dialog import DialogoPerfiles
 from qr_designer.ui.theme import (
     ACENTO,
     AYUDA_ICONO,
@@ -236,6 +237,7 @@ class QRDesignerApp:
         self.img_scraping = cargar_png(SCRAPING_FONDO, master=root)
         self.img_ayuda = cargar_png(AYUDA_ICONO, master=root)
         self.ventana_acerca: VentanaAcerca | None = None
+        self.ventana_perfiles: DialogoPerfiles | None = None
         self._sash_inicializado = False
         self._preview_photo: tk.PhotoImage | None = None
         self._export_cola: queue.Queue = queue.Queue()
@@ -398,11 +400,21 @@ class QRDesignerApp:
 
         ttk.Label(izq, text="Perfil", style="Heading.TLabel").pack(anchor=tk.W, pady=(8, 4))
         self.var_perfil = tk.StringVar()
+        fila_perfil = ttk.Frame(izq)
+        fila_perfil.pack(fill=tk.X)
         self.combo_perfil = ttk.Combobox(
-            izq, textvariable=self.var_perfil, state="readonly", width=COMBO_ANCHO
+            fila_perfil, textvariable=self.var_perfil, state="readonly", width=COMBO_ANCHO
         )
-        self.combo_perfil.pack(anchor=tk.W)
+        self.combo_perfil.pack(side=tk.LEFT)
         self.combo_perfil.bind("<<ComboboxSelected>>", self._on_perfil)
+        self.btn_gestionar_perfiles = ttk.Button(
+            fila_perfil, text="Gestionar perfiles", command=self._abrir_perfiles
+        )
+        self.btn_gestionar_perfiles.pack(side=tk.LEFT, padx=(8, 0))
+        self.btn_guardar_perfil = ttk.Button(
+            izq, text="Guardar perfil", command=self._guardar
+        )
+        self.btn_guardar_perfil.pack(anchor=tk.W, pady=(6, 0))
         self.lbl_activo = ttk.Label(izq, text="", style="Muted.TLabel")
         self.lbl_activo.pack(anchor=tk.W, pady=(2, 8))
 
@@ -484,14 +496,13 @@ class QRDesignerApp:
 
         btns = ttk.Frame(self.zona_export)
         btns.pack(fill=tk.X, pady=(8, 12))
-        ttk.Button(btns, text="Guardar perfil", command=self._guardar).pack(side=tk.LEFT)
         self.btn_exportar = ttk.Button(
             btns,
             text="Exportar imagen",
             command=self._exportar,
             style="Primary.TButton",
         )
-        self.btn_exportar.pack(side=tk.LEFT, padx=(8, 0))
+        self.btn_exportar.pack(side=tk.LEFT)
 
     def _combo(self, parent, etiqueta, var, values, handler):
         if etiqueta:
@@ -639,18 +650,55 @@ class QRDesignerApp:
         else:
             self.frm_adv.pack_forget()
 
+    def _abrir_perfiles(self) -> None:
+        if self.ventana_perfiles is not None:
+            try:
+                self.ventana_perfiles.lift()
+                self.ventana_perfiles.focus_set()
+                return
+            except tk.TclError:
+                self.ventana_perfiles = None
+        self.ventana_perfiles = DialogoPerfiles(
+            self.root,
+            self.vm,
+            on_cerrar=self._perfiles_cerrado,
+            on_cambio=self._perfiles_cambio,
+        )
+
+    def _perfiles_cambio(self) -> None:
+        self._refrescar_perfiles()
+        self._sync()
+
+    def _perfiles_cerrado(self) -> None:
+        self.ventana_perfiles = None
+        self._refrescar_perfiles()
+        self._sync()
+
     def _refrescar_perfiles(self) -> None:
         nombres = [p.nombre for p in self.vm.gestor.listar_todos()]
-        self.combo_perfil["values"] = nombres
-        self.var_perfil.set(self.vm.perfil_origen)
+        silencio = self._silencio
+        self._silencio = True
+        try:
+            self.combo_perfil["values"] = nombres
+            self.var_perfil.set(self.vm.perfil_origen)
+        finally:
+            self._silencio = silencio
+
+    def _puede_guardar(self) -> bool:
+        return self.vm.modificado and not es_preset(self.vm.perfil_origen)
 
     def _guardar(self) -> None:
-        nombre = simpledialog.askstring("Guardar perfil", "Nombre del perfil:", parent=self.root)
-        if not nombre:
+        if not self._puede_guardar():
+            return
+        nombre = self.vm.perfil_origen
+        if not messagebox.askyesno(
+            "Guardar perfil",
+            f"¿Guardar la configuración actual en «{nombre}»?",
+            parent=self.root,
+        ):
             return
         try:
-            existe = any(p.nombre == nombre for p in self.vm.gestor.listar())
-            self.vm.guardar_perfil(nombre, overwrite=existe)
+            self.vm.guardar_perfil(nombre, overwrite=True)
             self._refrescar_perfiles()
             self._sync()
             self.var_estado.set(f"Perfil «{nombre}» guardado")
@@ -800,6 +848,9 @@ class QRDesignerApp:
             else:
                 estado = tk.NORMAL if self.vm.puede_exportar else tk.DISABLED
                 self.btn_exportar.config(state=estado)
+            self.btn_guardar_perfil.config(
+                state=tk.NORMAL if self._puede_guardar() else tk.DISABLED
+            )
             self._pintar_preview()
             self._actualizar_hint_estado()
         finally:

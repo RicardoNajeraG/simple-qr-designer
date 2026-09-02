@@ -37,3 +37,6 @@ class ProfileService:
 
     def renombrar(self, viejo: str, nuevo: str) -> None:
         self._gestor.renombrar(viejo, nuevo)
+
+    def duplicar(self, origen: str, nuevo: str) -> dict[str, Any]:
+        return perfil_a_dict(self._gestor.duplicar(origen, nuevo))
