@@ -1,128 +1,142 @@
-# QR Designer
+<p align="center">
+  <img
+    src="src/qr_designer/ui/assets/Simple-qr-designer-banner.png"
+    alt="Banner ilustrado de Simple QR Designer: tipografía a mano y mapache mascota sobre fondo blanco"
+    width="720"
+  >
+</p>
 
-Generador de códigos QR personalizable para escritorio. Prioridad: **rápido y liviano**. La edición vive en una escena vectorial en memoria; Pillow se carga al previsualizar o exportar PNG/WEBP.
+# Simple QR Designer
 
-- Python ≥ 3.11
-- Dependencia de runtime: [`segno`](https://pypi.org/project/segno/)
-- GUI: tkinter (stdlib)
-- Extra opcional: Pillow para PNG/WEBP (también para la vista previa a la misma calidad que el export)
+Generador de códigos QR personalizable para escritorio. Prioridad: **rápido y liviano**. Crea QR en SVG, PNG o WEBP, con estilos, colores, marcos y logotipo, sin depender de un servicio en la nube.
+
+| | |
+| -------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Paquete | [![GitHub Release](https://img.shields.io/github/v/release/RicardoNajeraG/simple-qr-designer?logo=github)](https://github.com/RicardoNajeraG/simple-qr-designer/releases) [![Python Version](https://img.shields.io/badge/python-%3E%3D3.11-blue?logo=python&logoColor=white)](https://www.python.org/downloads/) [![GitHub Downloads](https://img.shields.io/github/downloads/RicardoNajeraG/simple-qr-designer/total?logo=github)](https://github.com/RicardoNajeraG/simple-qr-designer/releases) |
+| Build | [![Release](https://github.com/RicardoNajeraG/simple-qr-designer/actions/workflows/release.yml/badge.svg)](https://github.com/RicardoNajeraG/simple-qr-designer/actions/workflows/release.yml) |
+| Meta | [![License](https://img.shields.io/github/license/RicardoNajeraG/simple-qr-designer.svg)](https://github.com/RicardoNajeraG/simple-qr-designer/blob/master/LICENSE) [![Last Commit](https://img.shields.io/github/last-commit/RicardoNajeraG/simple-qr-designer.svg)](https://github.com/RicardoNajeraG/simple-qr-designer/commits/master) [![Repo Stars](https://img.shields.io/github/stars/RicardoNajeraG/simple-qr-designer.svg?style=social)](https://github.com/RicardoNajeraG/simple-qr-designer) |
+
+## ¿Qué es Simple QR Designer?
+
+**Simple QR Designer** es una aplicación de escritorio y una herramienta de línea de comandos, escritas en Python, para **diseñar y exportar códigos QR** a partir de una URL o de texto plano.
+
+A diferencia de los generadores QR en el navegador, el trabajo ocurre **en el equipo local**: la edición vive en una escena vectorial en memoria y Pillow solo se carga al previsualizar o exportar PNG/WEBP. El resultado se puede guardar como **SVG** (vector), **PNG** o **WEBP**.
+
+Sirve para marcas, menús, empaques, carteles, documentación y cualquier caso en el que el QR tenga que coincidir con una identidad visual y seguir siendo escaneable.
+
+## Tabla de contenido
+
+- [Características](#características)
+- [Instalación](#instalación)
+- [Uso](#uso)
+- [Perfiles](#perfiles)
+- [Preguntas frecuentes](#preguntas-frecuentes)
+- [Documentación para desarrollo](#documentación-para-desarrollo)
+- [Licencia](#licencia)
+- [Código de conducta](#código-de-conducta)
+- [Autor](#autor)
+
+## Características
+
+- **Escritorio y CLI** en Windows, Linux y macOS, con interfaz en español.
+- **Exportación** a SVG, PNG y WEBP desde un solo flujo: pegar contenido → personalizar → exportar.
+- **Presets de fábrica:** Clásico, Redondeado, Puntos, Escanéame y Barras.
+- **Estilos de módulo** (cuadrado, redondeado, puntos, gota, barras, squircle) y **ojos** (cuadrado, redondeado, círculo, hoja, squircle).
+- **Marcos** opcionales: perímetro, banda o «Escanéame» con texto.
+- **Colores** con selector propio (rueda + RGBA); el perfil guarda RGB opaco.
+- **Logotipo centrado** (PNG, JPEG, WEBP, GIF o SVG), guardado como ruta en el perfil de usuario.
+- **Perfiles de usuario** aparte de los presets de solo lectura. El perfil no incluye la URL.
+- **Vista previa en vivo** con el mismo raster que el export (píxeles enteros por módulo).
+- **Parámetros técnicos** (corrección de errores, píxeles por módulo) en **Avanzado**, colapsado por defecto.
+- **Dependencia de runtime:** [`segno`](https://pypi.org/project/segno/). GUI con **tkinter** (stdlib). Pillow es extra opcional para PNG/WEBP.
 
 ## Instalación
 
+### Instaladores (recomendado)
+
+Descarga la última versión en [GitHub Releases](https://github.com/RicardoNajeraG/simple-qr-designer/releases):
+
+- **Windows:** ejecuta el `.exe`.
+- **Debian/Ubuntu:** `sudo apt install ./qr-designer-*-linux-*.deb`
+- **macOS:** abre el `.dmg`. Si Gatekeeper bloquea: clic derecho → Abrir. El binario no está notarizado.
+
+Requisito si compilas o ejecutas desde el código: **Python ≥ 3.11**.
+
+### Desde el código fuente
+
 ```bash
 uv sync
-# PNG / WEBP:
+# PNG / WEBP y la misma calidad de vista previa:
 uv sync --extra raster
-# tests de decodificación:
-uv sync --extra raster --extra decode --extra dev
+
+uv run qr-designer
 ```
 
 ## Uso
 
-```bash
-# GUI (perfil Clásico ya aplicado)
-uv run qr-designer
+### Interfaz gráfica
 
-# CLI
+Flujo: pegar URL o texto (también con el ratón) → el QR con el perfil **Clásico** ya está listo → elige formato (SVG/PNG/WEBP) → **Exportar imagen**.
+
+- Personalizar actualiza en vivo.
+- El divisor entre opciones y preview se arrastra para agrandar el panel de opciones.
+- Clic en el swatch o el hex de un color abre el selector.
+- **Guardar perfil** pide un nombre si el activo es de fábrica (crea un perfil de usuario) y confirma antes de sobrescribir uno de Mis perfiles.
+
+### Línea de comandos
+
+```bash
 uv run qr-designer --url "https://example.com" -o qr.svg
 uv run qr-designer --url "https://example.com" --preset Puntos -o qr.png --px 8
 uv run qr-designer --url "https://example.com" --logo marca.png -o qr.svg
 ```
 
-Flujo de la GUI: pegar URL o texto (también con el ratón) → el QR con el perfil por defecto ya está listo → elige formato (SVG/PNG/WEBP) → **Exportar imagen**. La vista previa usa el mismo raster que el export (píxeles enteros por módulo, sin márgenes extra) y la ventana no puede hacerse más pequeña que ese recuadro. El divisor entre opciones y preview se arrastra para agrandar el panel de opciones. Personalizar actualiza en vivo. Clic en el swatch o el hex de un color abre un selector propio (rueda + RGBA); el perfil guarda solo RGB opaco. **Guardar perfil** pide un nombre si el activo es de fábrica (crea un perfil de usuario) y confirma antes de sobrescribir uno de Mis perfiles; el perfil nunca incluye la URL. El **logotipo** (imagen centrada: PNG, JPEG, WEBP, GIF o SVG) sí se guarda como ruta en el perfil de usuario.
+También acepta `--text` como alias de `--url` (sirve para texto plano, no solo direcciones web). Formatos: `svg`, `png`, `webp`.
 
-Los parámetros técnicos (corrección de errores, píxeles por módulo) están en **Avanzado**, colapsado por defecto.
+## Perfiles
 
-## Arquitectura
+Los 5 presets de fábrica son de solo lectura. Los perfiles de usuario viven en:
 
-```
-contenido + perfil dict
-        → service (fachada JSON-friendly)
-            → MatrizQR (segno) → Escena
-                → SVG | Pillow (export y preview)
-        → ui/viewmodel → GUI tkinter
-```
-
-La carpeta `src/qr_designer/service/` es el contrato previsto para un backend HTTP (FastAPI u otro) y un frontend web: entradas y salidas son `str`, `dict` y `bytes`. No hay tkinter ahí. Hoy lo consumen la GUI de escritorio y la CLI; mañana un servidor puede exponer los mismos métodos sin reescribir el núcleo.
-
-El raster **no** pasa por SVG. Estilos con curvas se supersamplean (y se reducen con LANCZOS) para anti-aliasing; el estilo clásico (rectángulos) sigue el fast path de paleta exacta. La quiet zone (≥ 4 módulos) no la recorta el marco. En preview se respeta la ECC del perfil; si está en `auto`, la elevación ocurre solo al exportar.
-
-El ícono de ventana es el mapache en PNG preescalados (`qr-designer-icon-32/64/256.png`). La cabecera usa `qr-designer-pet` y el banner ilustrado (sin texto «QR Designer»). La UI usa **Nunito** empaquetada (SIL OFL 1.1, TTF estáticos Regular/Bold) registrada en el proceso; si el registro falla, se cae a Segoe UI / SF Pro Text / Ubuntu. `tk scaling` se ajusta al DPI. Fondo blanco (`#ffffff`) como las ilustraciones.
-
-Perfiles de usuario (schema versionado, escritura atómica). Los 5 presets de fábrica son de solo lectura. `profiles.json` vive en:
-
-- Linux: `~/.qr_designer/profiles.json`
-- macOS: `~/Library/Application Support/QR Designer/profiles.json`
-- Windows: `%APPDATA%/QR Designer/profiles.json` (si no hay `APPDATA`, `~/AppData/Roaming/QR Designer/profiles.json`)
+- **Linux:** `~/.qr_designer/profiles.json`
+- **macOS:** `~/Library/Application Support/QR Designer/profiles.json`
+- **Windows:** `%APPDATA%/QR Designer/profiles.json`
 
 Si ya existía el archivo legado `~/.qr_designer/profiles.json` y aún no hay canónico, se copia una vez; el legado no se borra.
 
-### Backend futuro
+## Preguntas frecuentes
 
-Sin añadir dependencias ahora. El mapeo natural sería:
+**¿Simple QR Designer es una app web?**  
+No. Es software de escritorio (tkinter) y una CLI. No hace falta cuenta ni conexión para diseñar, salvo que el contenido del QR sea una URL que quieras probar después en el teléfono.
 
-| HTTP (previsto) | Servicio actual |
-|---|---|
-| `POST /qr` body `{contenido, perfil, formato, px}` | `qr_service.exportar_qr` |
-| `POST /qr.svg` | `qr_service.generar_svg` |
-| `POST /evaluar` | `qr_service.evaluar` |
-| `GET/PUT/DELETE /perfiles` | `ProfileService` |
+**¿Qué formatos de imagen genera?**  
+SVG vectorial, PNG y WEBP. PNG y WEBP necesitan el extra `raster` (Pillow) si ejecutas desde el código; los instaladores de Releases ya lo incluyen.
 
-El frontend web llamaría a ese API y no necesitaría instalar Python ni descargar el escritorio.
+**¿Puedo poner un logotipo en el centro?**  
+Sí. Acepta PNG, JPEG, WEBP, GIF o SVG. Conviene usar corrección de errores alta (el preset Puntos ya trae ECC H) para que el código siga siendo escaneable.
 
-## Tests
+**¿El perfil guarda la URL?**  
+No. Guarda estilo, colores, marco y la ruta del logotipo. El contenido se pega o se pasa por `--url` / `--text` en cada uso.
 
-```bash
-uv run pytest
-uv run pytest -m unit
-uv run pytest -m integration
-# regenerar goldens SVG
-UPDATE_GOLDEN=1 uv run pytest tests/unit_tests/test_svg.py
-```
+**¿Funciona sin Python instalado?**  
+Sí, si usas el `.exe`, el `.deb` o el `.dmg` de [Releases](https://github.com/RicardoNajeraG/simple-qr-designer/releases). Desde el repositorio hace falta Python ≥ 3.11 y `uv`.
 
-Marcadores: `unit`, `integration`, `raster` (Pillow), `decode` (zxing-cpp), `gui` (DISPLAY + tkinter).
+**¿Dónde está la documentación técnica?**  
+En [`READMEdevs.md`](READMEdevs.md): arquitectura, tests, empaquetado y criterios de aceptación.
 
-## Publicar una versión
+## Documentación para desarrollo
 
-Al hacer push a `master` o `main` con un cambio de `version` en `pyproject.toml`, CI corre los tests y sube a [GitHub Releases](https://github.com/RicardoNajeraG/simple-qr-designer/releases) un `.exe` (Windows), un `.deb` (Linux) y un `.dmg` (macOS).
+Arquitectura, tests, publicación de versiones y checklist de escaneo: **[`READMEdevs.md`](READMEdevs.md)**.
 
-La primera vez, o si quieres regenerar la versión actual sin subir el número: **Actions → Release → Run workflow** y marca `force`.
+## Licencia
 
-## Criterios de aceptación → tests
+[MIT](LICENSE)
 
-| Criterio | Cómo se certifica |
-|---|---|
-| Combinaciones de estilo siguen siendo escaneables | `tests/integration_tests/test_roundtrip.py` (ZXing, pairwise + puntos/gota con ECC H + contraste ~3:1) |
-| Arranque / generación liviana | `test_presupuestos.py` (matriz+SVG y rebuild de perfil < 200 ms en CI; meta local 50 ms) |
-| Ningún import pesado en edición | `test_export.py::test_import_scene_svg_cli_no_carga_pillow` y `test_import_cli_no_carga_tkinter` |
-| Guardar/cargar perfil sin reiniciar | `test_profiles.py`, `test_perfiles_flujo.py` |
-| Tres formatos desde «Exportar imagen» | GUI con un botón; CLI `-o .svg/.png/.webp`; `test_cli.py`, `test_export.py` |
-| Peso del archivo tras exportar | CLI imprime bytes; GUI lo muestra en la barra de estado; `test_cli_svg_reporta_peso` |
-| URL → QR con default → exportar ≤ 2 clics | `test_viewmodel.py::test_rux01_url_deja_exportable_con_perfil_default` |
-| Preview en vivo, debounce | `test_rux02_debounce_coalesce_rebuilds` |
-| Advertencia de contraste no bloqueante | `test_rf08_advertencia_no_bloquea_export` |
-| Quiet zone intocable | `test_scene.py::test_marco_no_recorta_quiet_zone` |
-| Paleta PNG con colores reales | `test_png_paleta_colores_exactos` (estilo cuadrado) |
-| PNG con logo centrado sigue siendo escaneable | `test_roundtrip_con_logo_central`, `test_logo.py` (caja segura) |
-| Preview = mismo raster que export | `test_preview.py` |
-| PNG/WEBP no se guardan como SVG | `test_export_dialog.py` (`resolver_export`, `filetypes_para`) |
-| Diálogo de guardado muestra el formato elegido | `test_filetypes_png_primero` |
-| Export PNG no se queda en «Exportando…» | `test_export_png_no_se_queda_exportando` |
-| Texto plano (no URL) se codifica y se lee | `test_roundtrip_texto_plano_no_url` |
-| Ícono, Nunito OFL, cabecera ilustrada y fondo blanco | `test_theme.py` |
-| Fachada lista para backend | `test_service.py` |
+## Código de conducta
 
-## Checklist manual (dispositivo)
+La participación en este proyecto se rige por el [Código de Conducta](CODE_OF_CONDUCT.md). Al abrir un issue, enviar un pull request o comentar, se espera que lo respetes. Los reportes se reciben en [ricardonajera93@gmail.com](mailto:ricardonajera93@gmail.com).
 
-Lo único no automatizable. Antes de un release, imprimir o mostrar en pantalla y escanear con 2–3 apps de cámara:
+## Autor
 
-1. Preset **Clásico**, URL corta, ECC M.
-2. **Puntos** + ojos círculo, ECC H, fondo blanco.
-3. **Gota** + ojos hoja, marco perímetro.
-4. Contraste justo (módulos gris oscuro sobre blanco).
-5. Marco «Escanéame» con texto largo truncado.
-6. PNG ~8 px/módulo y el mismo diseño en SVG abierto en el navegador.
-7. QR invertido (fondo negro, módulos blancos): confirmar que la UI advierte; no hace falta que todas las apps lo lean.
-8. Logotipo PNG o SVG en el centro (ECC efectiva H): escanear con 2 apps.
-
-Si un caso de estilo nuevo rompe el escaneo, añadirlo a `test_roundtrip.py` y, si hace falta, a la política de ECC recomendada en `config/contrast.py`.
+**Ricardo Nájera**  
+📧 [ricardonajera93@gmail.com](mailto:ricardonajera93@gmail.com)  
+📦 [github.com/RicardoNajeraG/simple-qr-designer](https://github.com/RicardoNajeraG/simple-qr-designer)

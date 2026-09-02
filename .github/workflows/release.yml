@@ -34,11 +34,11 @@ jobs:
       should_release: ${{ steps.bump.outputs.should_release }}
       version: ${{ steps.bump.outputs.version }}
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v5
         with:
           fetch-depth: 0
 
-      - uses: actions/setup-python@v5
+      - uses: actions/setup-python@v6
         with:
           python-version: "3.11"
 
@@ -62,13 +62,13 @@ jobs:
     if: needs.detectar.outputs.should_release == 'true'
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v5
 
-      - uses: actions/setup-python@v5
+      - uses: actions/setup-python@v6
         with:
           python-version: "3.11"
 
-      - uses: astral-sh/setup-uv@v6
+      - uses: astral-sh/setup-uv@v10.0.1
         with:
           python-version: "3.11"
           enable-cache: true
@@ -113,13 +113,13 @@ jobs:
     runs-on: ${{ matrix.os }}
     timeout-minutes: 45
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v5
 
-      - uses: actions/setup-python@v5
+      - uses: actions/setup-python@v6
         with:
           python-version: "3.11"
 
-      - uses: astral-sh/setup-uv@v6
+      - uses: astral-sh/setup-uv@v10.0.1
         with:
           python-version: "3.11"
           enable-cache: true
@@ -146,7 +146,7 @@ jobs:
       - name: Construir instalador
         run: uv run python packaging/build_release.py
 
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@v7
         with:
           name: installer-${{ matrix.etiqueta }}
           path: dist/release/*
@@ -160,7 +160,7 @@ jobs:
     permissions:
       contents: write
     steps:
-      - uses: actions/download-artifact@v4
+      - uses: actions/download-artifact@v7
         with:
           pattern: installer-*
           merge-multiple: true
@@ -169,7 +169,7 @@ jobs:
       - name: Listar artefactos
         run: ls -lah artifacts
 
-      - uses: softprops/action-gh-release@v2
+      - uses: softprops/action-gh-release@v3
         with:
           tag_name: v${{ needs.detectar.outputs.version }}
           name: QR Designer ${{ needs.detectar.outputs.version }}
