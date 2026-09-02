@@ -7,6 +7,7 @@ import pytest
 from qr_designer.config.contrast import (
     UMBRAL_CONTRASTE,
     UMBRAL_FILL,
+    ecc_recomendada_por_estilo,
     evaluar_contraste,
     fill_ratio_estilo,
     ratio_contraste,
@@ -110,3 +111,26 @@ def test_bajo_contraste_modulos_ojos_y_marco() -> None:
 @pytest.mark.unit
 def test_alfa_implicito_no_cambia_rgb() -> None:
     assert ratio_contraste("#000000ff", "#ffffffff") == pytest.approx(21.0, rel=1e-3)
+
+
+@pytest.mark.unit
+def test_logo_recomienda_ecc_h() -> None:
+    perfil = Perfil(nombre="l", logo_path="/tmp/logo.png")
+    assert ecc_recomendada_por_estilo(perfil) == "H"
+    ev = evaluar_contraste(perfil)
+    assert any("logotipo" in a.lower() or "logo" in a.lower() for a in ev.advertencias)
+
+
+@pytest.mark.unit
+def test_logo_id_tambien_recomienda_ecc_h(monkeypatch) -> None:
+    from qr_designer.logos import LogoDesconocido
+
+    def _resolver(ident: str, raiz=None):
+        raise LogoDesconocido(ident)
+
+    monkeypatch.setattr("qr_designer.logos.resolver_logo", _resolver)
+    perfil = Perfil(nombre="l", logo_id="wifi")
+    assert ecc_recomendada_por_estilo(perfil) == "H"
+    ev = evaluar_contraste(perfil)
+    assert any("logotipo" in a.lower() or "logo" in a.lower() for a in ev.advertencias)
+    assert any("no se encontró" in a.lower() or "no se encontro" in a.lower() for a in ev.advertencias)

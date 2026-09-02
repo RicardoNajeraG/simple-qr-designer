@@ -7,14 +7,19 @@ import queue
 import threading
 import tkinter as tk
 from pathlib import Path
-from tkinter import colorchooser, filedialog, messagebox, simpledialog, ttk
+from tkinter import filedialog, messagebox, simpledialog, ttk
 
 from qr_designer.config.models import Correccion, MarcoTipo, ModuloEstilo, OjoEstilo
-from qr_designer.config.profiles import PerfilError
-from qr_designer.export.paths import filetypes_para, resolver_export
+from qr_designer.config.presets import NOMBRES_PRESET
+from qr_designer.config.profiles import PerfilError, es_preset
+from qr_designer.export.paths import filetypes_logo, filetypes_para, resolver_export
+from qr_designer.logos import listar_logos
 from qr_designer.render.canvas import pintar_canvas
 from qr_designer.render.preview import px_para_preview
 from qr_designer.ui.acerca import VentanaAcerca
+from qr_designer.ui.color_picker import SelectorColor
+from qr_designer.ui.perfiles_dialog import DialogoPerfiles, nombre_libre_propuesto
+from qr_designer.ui.redondeo import CajaRedonda, MarcoRedondeado
 from qr_designer.ui.theme import (
     ACENTO,
     AYUDA_ICONO,
@@ -22,7 +27,6 @@ from qr_designer.ui.theme import (
     BORDE,
     FONDO,
     GRIS,
-    MARCO_PREVIEW,
     PET_HEADER,
     SCRAPING_FONDO,
     SCROLL_THUMB,
@@ -39,6 +43,8 @@ PREVIEW_PAD = 12
 SIDEBAR_ANCHO = 320
 COMBO_ANCHO = 16
 PAD = 16
+LOGO_MINI = 32
+LOGO_CATALOGO_COLS = 6
 HINT_CONTENIDO = "Pega una URL o escribe un texto"
 SWATCHES = (
     "#000000",
@@ -225,6 +231,25 @@ class _PanelDesplazable(ttk.Frame):
         return "break"
 
 
+def _miniatura_logo(path: Path, master: tk.Misc, lado: int = LOGO_MINI) -> tk.PhotoImage | None:
+    img = cargar_png(path, master=master)
+    if img is None:
+        return None
+    w, h = img.width(), img.height()
+    if w <= 0 or h <= 0:
+        return None
+    mayor = max(w, h)
+    if mayor > lado:
+        factor = max(1, mayor // lado)
+        if factor > 1:
+            img = img.subsample(factor, factor)
+    elif mayor < lado:
+        z = max(1, lado // mayor)
+        if z > 1:
+            img = img.zoom(z, z)
+    return img
+
+
 class QRDesignerApp:
     def __init__(self, root: tk.Tk, vm: ViewModel | None = None) -> None:
         self.root = root
@@ -236,7 +261,10 @@ class QRDesignerApp:
         self.img_scraping = cargar_png(SCRAPING_FONDO, master=root)
         self.img_ayuda = cargar_png(AYUDA_ICONO, master=root)
         self.ventana_acerca: VentanaAcerca | None = None
+        self.ventana_perfiles: DialogoPerfiles | None = None
+        self.ventana_color: SelectorColor | None = None
         self._sash_inicializado = False
+        self._sash_intentos = 0
         self._preview_photo: tk.PhotoImage | None = None
         self._export_cola: queue.Queue = queue.Queue()
         self._exportando = False
@@ -263,15 +291,10 @@ class QRDesignerApp:
         self.paned = ttk.Panedwindow(root, orient=tk.HORIZONTAL)
         self.paned.grid(row=1, column=0, sticky="nsew", padx=PAD, pady=8)
 
-        self.marco_opciones = tk.Frame(
-            self.paned,
-            bg=FONDO,
-            highlightthickness=1,
-            highlightbackground=MARCO_PREVIEW,
-            highlightcolor=MARCO_PREVIEW,
-            bd=0,
-        )
-        self.panel = _PanelDesplazable(self.marco_opciones, SIDEBAR_ANCHO)
+        izq = ttk.Frame(self.paned)
+        self.marco_opciones = MarcoRedondeado(izq, width=SIDEBAR_ANCHO)
+        self.marco_opciones.pack(fill=tk.BOTH, expand=True)
+        self.panel = _PanelDesplazable(self.marco_opciones.inner, SIDEBAR_ANCHO)
         self.panel.pack(fill=tk.BOTH, expand=True, padx=4, pady=4)
         self.panel.inner.bind("<Configure>", self._on_sidebar_ancho, add="+")
         self._controles(self.panel.inner)
@@ -282,19 +305,13 @@ class QRDesignerApp:
         ttk.Label(der, text="Vista previa", style="Heading.TLabel").grid(
             row=0, column=0, sticky="w"
         )
-        self.marco_preview = tk.Frame(
-            der,
-            bg=FONDO,
-            highlightthickness=1,
-            highlightbackground=MARCO_PREVIEW,
-            highlightcolor=MARCO_PREVIEW,
-            bd=0,
-        )
+        self.marco_preview = MarcoRedondeado(der)
         self.marco_preview.grid(row=1, column=0, sticky="nsew", pady=(8, 0))
-        self.marco_preview.grid_rowconfigure(0, weight=1)
-        self.marco_preview.grid_columnconfigure(0, weight=1)
+        inner_prev = self.marco_preview.inner
+        inner_prev.grid_rowconfigure(0, weight=1)
+        inner_prev.grid_columnconfigure(0, weight=1)
         self.canvas = tk.Canvas(
-            self.marco_preview,
+            inner_prev,
             width=PREVIEW_LADO,
             height=PREVIEW_LADO,
             bg=SUPERFICIE,
@@ -303,7 +320,7 @@ class QRDesignerApp:
         )
         self.canvas.grid(row=0, column=0, padx=PREVIEW_PAD, pady=PREVIEW_PAD)
 
-        self.paned.add(self.marco_opciones, weight=0)
+        self.paned.add(izq, weight=0)
         self.paned.add(der, weight=1)
         try:
             self.paned.pane(
@@ -363,12 +380,21 @@ class QRDesignerApp:
         try:
             self.root.update_idletasks()
             ancho = self.ancho_opciones_inicial()
-            if ancho < 180:
-                self.root.after(50, self._inicializar_sash)
+            paned_w = int(self.paned.winfo_width())
+            listo = ancho >= 180 and paned_w >= ancho + 80
+            if listo:
+                self.panel.canvas.config(width=max(ancho - 12, 120))
+                self.paned.sashpos(0, ancho)
+                self.root.update_idletasks()
+                listo = int(self.paned.sashpos(0) or 0) >= 180
+            if not listo:
+                self._sash_intentos += 1
+                if self._sash_intentos < 40:
+                    self.root.after(50, self._inicializar_sash)
                 return
-            self.panel.canvas.config(width=max(ancho - 12, 120))
-            self.paned.sashpos(0, ancho)
             self._sash_inicializado = True
+            self.marco_opciones._redibujar()
+            self.marco_preview._redibujar()
         except tk.TclError:
             return
 
@@ -398,11 +424,27 @@ class QRDesignerApp:
 
         ttk.Label(izq, text="Perfil", style="Heading.TLabel").pack(anchor=tk.W, pady=(8, 4))
         self.var_perfil = tk.StringVar()
+        fila_perfil = ttk.Frame(izq)
+        fila_perfil.pack(fill=tk.X)
+        caja_combo = CajaRedonda(fila_perfil)
         self.combo_perfil = ttk.Combobox(
-            izq, textvariable=self.var_perfil, state="readonly", width=COMBO_ANCHO
+            caja_combo, textvariable=self.var_perfil, state="readonly", width=COMBO_ANCHO
         )
-        self.combo_perfil.pack(anchor=tk.W)
+        caja_combo.alojar(self.combo_perfil)
+        caja_combo.pack(side=tk.LEFT)
         self.combo_perfil.bind("<<ComboboxSelected>>", self._on_perfil)
+        caja_gest = CajaRedonda(fila_perfil, fondo=BORDE, borde=BORDE)
+        self.btn_gestionar_perfiles = ttk.Button(
+            caja_gest, text="Gestionar perfiles", command=self._abrir_perfiles
+        )
+        caja_gest.alojar(self.btn_gestionar_perfiles)
+        caja_gest.pack(side=tk.LEFT, padx=(8, 0))
+        caja_guardar = CajaRedonda(izq, fondo=BORDE, borde=BORDE)
+        self.btn_guardar_perfil = ttk.Button(
+            caja_guardar, text="Guardar perfil", command=self._guardar
+        )
+        caja_guardar.alojar(self.btn_guardar_perfil)
+        caja_guardar.pack(anchor=tk.W, pady=(6, 0))
         self.lbl_activo = ttk.Label(izq, text="", style="Muted.TLabel")
         self.lbl_activo.pack(anchor=tk.W, pady=(2, 8))
 
@@ -425,6 +467,7 @@ class QRDesignerApp:
         self.lbl_colores = ttk.Label(izq, text="Colores", style="Heading.TLabel")
         self.lbl_colores.pack(anchor=tk.W, pady=(12, 4))
         self._colores: dict[str, tk.StringVar] = {}
+        self._entry_color: dict[str, ttk.Entry] = {}
         for campo, etiqueta in (
             ("fondo", "Fondo"),
             ("modulos", "Módulos"),
@@ -432,6 +475,28 @@ class QRDesignerApp:
             ("marco", "Marco"),
         ):
             self._fila_color(izq, campo, etiqueta)
+
+        ttk.Label(izq, text="Logotipo", style="Heading.TLabel").pack(anchor=tk.W, pady=(12, 4))
+        self.frm_logos_catalogo = ttk.Frame(izq)
+        self.frm_logos_catalogo.pack(fill=tk.X, pady=(0, 6))
+        self.btns_logo_catalogo: dict[str, ttk.Button] = {}
+        self.cajas_logo_catalogo: dict[str, CajaRedonda] = {}
+        self._fotos_logo_catalogo: list[tk.PhotoImage] = []
+        self._montar_catalogo_logos()
+        fila_logo = ttk.Frame(izq)
+        fila_logo.pack(fill=tk.X)
+        caja_elegir = CajaRedonda(fila_logo, fondo=BORDE, borde=BORDE)
+        self.btn_elegir_logo = ttk.Button(
+            caja_elegir, text="Elegir imagen", command=self._elegir_logo
+        )
+        caja_elegir.alojar(self.btn_elegir_logo)
+        caja_elegir.pack(side=tk.LEFT)
+        caja_quitar = CajaRedonda(fila_logo, fondo=BORDE, borde=BORDE)
+        self.btn_quitar_logo = ttk.Button(caja_quitar, text="Quitar", command=self._quitar_logo)
+        caja_quitar.alojar(self.btn_quitar_logo)
+        caja_quitar.pack(side=tk.LEFT, padx=(8, 0))
+        self.lbl_logo = ttk.Label(izq, text="Ninguno", style="Muted.TLabel")
+        self.lbl_logo.pack(anchor=tk.W, pady=(4, 0))
 
         self.lbl_aviso = ttk.Label(izq, text="", wraplength=280, style="Aviso.TLabel")
         self.lbl_aviso.pack(anchor=tk.W, pady=8)
@@ -450,7 +515,10 @@ class QRDesignerApp:
         self._combo(self.frm_adv, None, self.var_ecc, [e.value for e in Correccion], self._on_ecc)
         ttk.Label(self.frm_adv, text="Píxeles por módulo (PNG/WEBP)").pack(anchor=tk.W)
         self.var_px = tk.IntVar(value=8)
-        ttk.Spinbox(self.frm_adv, from_=1, to=32, textvariable=self.var_px, width=6).pack(anchor=tk.W)
+        caja_px = CajaRedonda(self.frm_adv)
+        sp_px = ttk.Spinbox(caja_px, from_=1, to=32, textvariable=self.var_px, width=6)
+        caja_px.alojar(sp_px)
+        caja_px.pack(anchor=tk.W)
         self.lbl_ecc_sug = ttk.Label(self.frm_adv, text="", style="Muted.TLabel")
         self.lbl_ecc_sug.pack(anchor=tk.W)
 
@@ -474,32 +542,38 @@ class QRDesignerApp:
         fila_fmt.pack(fill=tk.X, pady=(4, 0))
         ttk.Label(fila_fmt, text="Formato").pack(side=tk.LEFT)
         self.var_formato = tk.StringVar(value="svg")
-        ttk.Combobox(
-            fila_fmt,
+        caja_fmt = CajaRedonda(fila_fmt)
+        combo_fmt = ttk.Combobox(
+            caja_fmt,
             textvariable=self.var_formato,
             values=("svg", "png", "webp"),
             state="readonly",
             width=8,
-        ).pack(side=tk.LEFT, padx=(8, 0))
+        )
+        caja_fmt.alojar(combo_fmt)
+        caja_fmt.pack(side=tk.LEFT, padx=(8, 0))
 
         btns = ttk.Frame(self.zona_export)
         btns.pack(fill=tk.X, pady=(8, 12))
-        ttk.Button(btns, text="Guardar perfil", command=self._guardar).pack(side=tk.LEFT)
+        caja_export = CajaRedonda(btns, fondo=ACENTO, borde=ACENTO)
         self.btn_exportar = ttk.Button(
-            btns,
+            caja_export,
             text="Exportar imagen",
             command=self._exportar,
             style="Primary.TButton",
         )
-        self.btn_exportar.pack(side=tk.LEFT, padx=(8, 0))
+        caja_export.alojar(self.btn_exportar)
+        caja_export.pack(side=tk.LEFT)
 
     def _combo(self, parent, etiqueta, var, values, handler):
         if etiqueta:
             ttk.Label(parent, text=etiqueta).pack(anchor=tk.W, pady=(4, 0))
+        caja = CajaRedonda(parent)
         box = ttk.Combobox(
-            parent, textvariable=var, values=values, state="readonly", width=COMBO_ANCHO
+            caja, textvariable=var, values=values, state="readonly", width=COMBO_ANCHO
         )
-        box.pack(anchor=tk.W)
+        caja.alojar(box)
+        caja.pack(anchor=tk.W)
         box.bind("<<ComboboxSelected>>", lambda _e: handler())
         return box
 
@@ -508,8 +582,11 @@ class QRDesignerApp:
         fila.pack(fill=tk.X, pady=pady)
         fila.columnconfigure(0, weight=9)
         fila.columnconfigure(1, weight=1)
-        ent = ttk.Entry(fila, textvariable=var)
-        ent.grid(row=0, column=0, sticky="ew")
+        caja = CajaRedonda(fila)
+        ent = ttk.Entry(caja, textvariable=var)
+        caja.alojar(ent, expandir=True)
+        caja.grid(row=0, column=0, sticky="ew")
+        ttk.Frame(fila).grid(row=0, column=1, sticky="ew")
         return ent
 
     def _actualizar_marco_texto_ui(self) -> None:
@@ -534,14 +611,18 @@ class QRDesignerApp:
             relief="solid",
             bd=1,
             highlightthickness=0,
-            command=lambda c=campo: self._picker(c),
+            command=lambda c=campo: self._abrir_selector(c),
         )
         sw.pack(side=tk.LEFT, padx=4)
         setattr(self, f"_sw_{campo}", sw)
-        ent = ttk.Entry(fila, textvariable=var, width=10)
-        ent.pack(side=tk.LEFT)
+        caja_hex = CajaRedonda(fila)
+        ent = ttk.Entry(caja_hex, textvariable=var, width=10)
+        caja_hex.alojar(ent)
+        caja_hex.pack(side=tk.LEFT)
+        self._entry_color[campo] = ent
         ent.bind("<Return>", lambda _e, c=campo: self._hex(c))
         ent.bind("<FocusOut>", lambda _e, c=campo: self._hex(c))
+        ent.bind("<Button-1>", lambda _e, c=campo: self._abrir_selector(c), add="+")
         pal = ttk.Frame(parent)
         pal.pack(anchor=tk.W, pady=(0, 4))
         if not hasattr(self, "pal_swatches"):
@@ -606,11 +687,91 @@ class QRDesignerApp:
         except Exception as exc:
             self.var_estado.set(str(exc))
 
-    def _picker(self, campo: str) -> None:
+    def _montar_catalogo_logos(self) -> None:
+        for i, entrada in enumerate(listar_logos()):
+            caja = CajaRedonda(self.frm_logos_catalogo, radio=6, borde=BORDE, fondo=SUPERFICIE)
+            img = _miniatura_logo(entrada.path, self.root)
+            kwargs: dict = {"padding": 0}
+            if img is not None:
+                self._fotos_logo_catalogo.append(img)
+                kwargs["image"] = img
+            else:
+                kwargs["text"] = entrada.id[:4]
+            btn = ttk.Button(
+                caja,
+                command=lambda lid=entrada.id: self._on_logo_catalogo(lid),
+                **kwargs,
+            )
+            caja.alojar(btn)
+            fila, col = divmod(i, LOGO_CATALOGO_COLS)
+            caja.grid(row=fila, column=col, padx=2, pady=2)
+            self.btns_logo_catalogo[entrada.id] = btn
+            self.cajas_logo_catalogo[entrada.id] = caja
+
+    def _on_logo_catalogo(self, ident: str) -> None:
+        self.vm.set_logo_catalogo(ident)
+
+    def _nombre_logo_catalogo(self, ident: str) -> str:
+        for entrada in listar_logos():
+            if entrada.id == ident:
+                return entrada.nombre
+        return ident
+
+    def _sync_cromo_catalogo(self) -> None:
+        activo = self.vm.perfil.logo_id
+        for lid, caja in self.cajas_logo_catalogo.items():
+            caja.set_borde(ACENTO if lid == activo else BORDE)
+
+    def _elegir_logo(self) -> None:
+        path = filedialog.askopenfilename(
+            parent=self.root,
+            title="Elegir logotipo",
+            filetypes=filetypes_logo(),
+        )
+        if path:
+            self.vm.set_logo(path)
+
+    def _quitar_logo(self) -> None:
+        self.vm.set_logo(None)
+
+    def _abrir_selector(self, campo: str) -> None:
+        if self.ventana_color is not None:
+            try:
+                if self.ventana_color.campo == campo:
+                    self.ventana_color.lift()
+                    self.ventana_color.focus_set()
+                    return
+                self._cerrar_selector()
+            except tk.TclError:
+                self.ventana_color = None
         actual = self.vm.perfil.colores.to_dict()[campo]
-        elegido = colorchooser.askcolor(color=actual, title=f"Color {campo}")
-        if elegido and elegido[1]:
-            self.vm.set_color(campo, elegido[1])
+        self.ventana_color = SelectorColor(
+            self.root,
+            campo,
+            actual,
+            on_rgb=lambda hexcol, c=campo: self._color_desde_selector(c, hexcol),
+            on_cerrar=self._selector_cerrado,
+        )
+
+    def _color_desde_selector(self, campo: str, hexcol: str) -> None:
+        try:
+            self.vm.set_color(campo, hexcol)
+        except Exception as exc:
+            self.var_estado.set(str(exc))
+
+    def _selector_cerrado(self) -> None:
+        self.ventana_color = None
+
+    def _cerrar_selector(self) -> None:
+        if self.ventana_color is None:
+            return
+        win = self.ventana_color
+        self.ventana_color = None
+        try:
+            win._on_cerrar = None
+            win.destroy()
+        except tk.TclError:
+            return
 
     def _toggle_acerca(self, _event=None) -> None:
         if self.ventana_acerca is not None:
@@ -639,21 +800,73 @@ class QRDesignerApp:
         else:
             self.frm_adv.pack_forget()
 
+    def _abrir_perfiles(self) -> None:
+        if self.ventana_perfiles is not None:
+            try:
+                self.ventana_perfiles.lift()
+                self.ventana_perfiles.focus_set()
+                return
+            except tk.TclError:
+                self.ventana_perfiles = None
+        self.ventana_perfiles = DialogoPerfiles(
+            self.root,
+            self.vm,
+            on_cerrar=self._perfiles_cerrado,
+            on_cambio=self._perfiles_cambio,
+        )
+
+    def _perfiles_cambio(self) -> None:
+        self._refrescar_perfiles()
+        self._sync()
+
+    def _perfiles_cerrado(self) -> None:
+        self.ventana_perfiles = None
+        self._refrescar_perfiles()
+        self._sync()
+
     def _refrescar_perfiles(self) -> None:
         nombres = [p.nombre for p in self.vm.gestor.listar_todos()]
-        self.combo_perfil["values"] = nombres
-        self.var_perfil.set(self.vm.perfil_origen)
+        silencio = self._silencio
+        self._silencio = True
+        try:
+            self.combo_perfil["values"] = nombres
+            self.var_perfil.set(self.vm.perfil_origen)
+        finally:
+            self._silencio = silencio
+
+    def _puede_guardar(self) -> bool:
+        return self.vm.modificado
 
     def _guardar(self) -> None:
-        nombre = simpledialog.askstring("Guardar perfil", "Nombre del perfil:", parent=self.root)
-        if not nombre:
+        if not self._puede_guardar():
             return
         try:
-            existe = any(p.nombre == nombre for p in self.vm.gestor.listar())
-            self.vm.guardar_perfil(nombre, overwrite=existe)
+            if es_preset(self.vm.perfil_origen):
+                ocupados = set(NOMBRES_PRESET)
+                ocupados.update(p.nombre for p in self.vm.gestor.listar())
+                propuesto = nombre_libre_propuesto("Nuevo perfil", ocupados)
+                nombre = simpledialog.askstring(
+                    "Guardar perfil",
+                    "Nombre del nuevo perfil:",
+                    initialvalue=propuesto,
+                    parent=self.root,
+                )
+                if not nombre or not str(nombre).strip():
+                    return
+                destino = str(nombre).strip()
+                self.vm.guardar_perfil(destino, overwrite=False)
+            else:
+                destino = self.vm.perfil_origen
+                if not messagebox.askyesno(
+                    "Guardar perfil",
+                    f"¿Guardar la configuración actual en «{destino}»?",
+                    parent=self.root,
+                ):
+                    return
+                self.vm.guardar_perfil(destino, overwrite=True)
             self._refrescar_perfiles()
             self._sync()
-            self.var_estado.set(f"Perfil «{nombre}» guardado")
+            self.var_estado.set(f"Perfil «{destino}» guardado")
         except PerfilError as exc:
             messagebox.showerror("Perfil", str(exc), parent=self.root)
 
@@ -787,9 +1000,21 @@ class QRDesignerApp:
                 var.set(valor)
                 getattr(self, f"_sw_{campo}").config(bg=valor, activebackground=valor)
             self.lbl_activo.config(text=f"Activo: {self.vm.etiqueta_perfil}")
+            if p.logo_id:
+                self.lbl_logo.config(text=self._nombre_logo_catalogo(p.logo_id))
+                self.btn_quitar_logo.config(state=tk.NORMAL)
+            elif p.logo_path:
+                self.lbl_logo.config(text=Path(p.logo_path).name)
+                self.btn_quitar_logo.config(state=tk.NORMAL)
+            else:
+                self.lbl_logo.config(text="Ninguno")
+                self.btn_quitar_logo.config(state=tk.DISABLED)
+            self._sync_cromo_catalogo()
             self.lbl_aviso.config(text=self.vm.advertencia_contraste or "")
             sug = self.vm.ecc_recomendada
-            if sug != p.correccion.value and p.correccion.value != "auto":
+            if p.logo_id or p.logo_path:
+                self.lbl_ecc_sug.config(text="Con logotipo el QR se genera con corrección H")
+            elif sug != p.correccion.value and p.correccion.value != "auto":
                 self.lbl_ecc_sug.config(
                     text=f"Sugerida para lectura: {sug} (el preview no cambia)"
                 )
@@ -800,6 +1025,9 @@ class QRDesignerApp:
             else:
                 estado = tk.NORMAL if self.vm.puede_exportar else tk.DISABLED
                 self.btn_exportar.config(state=estado)
+            self.btn_guardar_perfil.config(
+                state=tk.NORMAL if self._puede_guardar() else tk.DISABLED
+            )
             self._pintar_preview()
             self._actualizar_hint_estado()
         finally:

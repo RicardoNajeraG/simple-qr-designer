@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import argparse
+from dataclasses import replace
 from pathlib import Path
 from typing import Sequence
 
@@ -22,6 +23,7 @@ def _parser() -> argparse.ArgumentParser:
     p.add_argument("--preset", default="Clásico", help="Nombre de preset de fábrica")
     p.add_argument("--format", choices=("svg", "png", "webp"), help="Formato (si no se infiere de -o)")
     p.add_argument("--px", type=int, default=None, help="Píxeles por módulo (PNG/WEBP)")
+    p.add_argument("--logo", help="Imagen centrada en el QR (PNG/JPEG/WEBP/GIF/SVG)")
     return p
 
 
@@ -32,6 +34,8 @@ def exportar_desde_argv(argv: Sequence[str]) -> int:
     perfil = preset_por_nombre(ns.preset) or preset_clasico()
     if ns.preset != "Clásico" and preset_por_nombre(ns.preset) is None:
         raise SystemExit(f"Preset desconocido: {ns.preset}")
+    if ns.logo:
+        perfil = replace(perfil, logo_path=ns.logo)
     fmt_pedido = ns.format or Path(ns.output).suffix.lstrip(".").lower() or "svg"
     destino, fmt = resolver_export(ns.output, fmt_pedido)
     resultado = exportar_qr(ns.url, perfil_a_dict(perfil), fmt, ns.px)

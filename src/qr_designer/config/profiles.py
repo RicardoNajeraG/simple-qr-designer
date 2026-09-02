@@ -4,15 +4,19 @@ from __future__ import annotations
 
 import json
 import os
+import shutil
+import sys
 import tempfile
+from dataclasses import replace
 from pathlib import Path
-from typing import Any
+from typing import Any, Mapping
 
 from qr_designer.config.models import Perfil
 from qr_designer.config.presets import NOMBRES_PRESET, PRESETS, preset_por_nombre
 from qr_designer.core.encoder import QRDesignerError
 
-SCHEMA_VERSION = 1
+SCHEMA_VERSION = 3
+_DIR_APP = "QR Designer"
 
 
 class PerfilError(QRDesignerError):
@@ -35,6 +39,53 @@ class PerfilCorrupto(PerfilError):
     pass
 
 
+def es_preset(nombre: str) -> bool:
+    return nombre in NOMBRES_PRESET
+
+
+def ruta_perfiles_legado(home: Path | None = None) -> Path:
+    base = Path(home) if home is not None else Path.home()
+    return base / ".qr_designer" / "profiles.json"
+
+
+def ruta_perfiles_canonica(
+    plataforma: str | None = None,
+    home: Path | None = None,
+    environ: Mapping[str, str] | None = None,
+) -> Path:
+    plat = sys.platform if plataforma is None else plataforma
+    base = Path(home) if home is not None else Path.home()
+    env = os.environ if environ is None else environ
+    if plat == "win32":
+        appdata = env.get("APPDATA")
+        if appdata:
+            return Path(appdata) / _DIR_APP / "profiles.json"
+        return base / "AppData" / "Roaming" / _DIR_APP / "profiles.json"
+    if plat == "darwin":
+        return base / "Library" / "Application Support" / _DIR_APP / "profiles.json"
+    return ruta_perfiles_legado(base)
+
+
+def ruta_perfiles_default(
+    plataforma: str | None = None,
+    home: Path | None = None,
+    environ: Mapping[str, str] | None = None,
+) -> Path:
+    base = Path(home) if home is not None else Path.home()
+    canonica = ruta_perfiles_canonica(plataforma, base, environ)
+    legado = ruta_perfiles_legado(base)
+    if canonica.exists():
+        return canonica
+    if legado.exists() and legado.resolve() != canonica.resolve():
+        try:
+            canonica.parent.mkdir(parents=True, exist_ok=True)
+            shutil.copy2(legado, canonica)
+            return canonica
+        except OSError:
+            return legado
+    return canonica
+
+
 def _atomic_write(path: Path, texto: str) -> None:
     path.parent.mkdir(parents=True, exist_ok=True)
     fd, tmp_name = tempfile.mkstemp(prefix=".profiles.", suffix=".tmp", dir=path.parent)
@@ -52,7 +103,7 @@ def _atomic_write(path: Path, texto: str) -> None:
 
 class GestorPerfiles:
     def __init__(self, ruta: Path | None = None) -> None:
-        self.ruta = Path(ruta) if ruta else Path.home() / ".qr_designer" / "profiles.json"
+        self.ruta = Path(ruta) if ruta is not None else ruta_perfiles_default()
 
     def por_defecto(self) -> Perfil:
         return PRESETS[0]
@@ -103,17 +154,21 @@ class GestorPerfiles:
         if nuevo in usuarios and nuevo != viejo:
             raise PerfilYaExiste(nuevo)
         perfil = usuarios.pop(viejo)
-        usuarios[nuevo] = Perfil(
-            nombre=nuevo,
-            modulo_estilo=perfil.modulo_estilo,
-            ojo_estilo=perfil.ojo_estilo,
-            marco_tipo=perfil.marco_tipo,
-            marco_texto=perfil.marco_texto,
-            correccion=perfil.correccion,
-            colores=perfil.colores,
-            quiet_zone=perfil.quiet_zone,
-        )
+        usuarios[nuevo] = replace(perfil, nombre=nuevo)
         self._guardar_usuarios(usuarios)
+
+    def duplicar(self, origen: str, nuevo: str) -> Perfil:
+        destino = (nuevo or "").strip()
+        if not destino:
+            raise ValueError("El nuevo nombre está vacío")
+        if destino in NOMBRES_PRESET:
+            raise PerfilProtegido(f"El preset '{destino}' no se puede sobrescribir")
+        base = self.obtener(origen)
+        datos = base.to_dict()
+        datos["nombre"] = destino
+        copia = Perfil.from_dict(datos)
+        self.guardar(copia, overwrite=False)
+        return copia
 
     def _usuarios(self) -> dict[str, Perfil]:
         if not self.ruta.exists():

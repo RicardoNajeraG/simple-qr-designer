@@ -112,10 +112,39 @@ def aplicar_tema(root: tk.Tk) -> ttk.Style:
     style.configure("Muted.TLabel", background=FONDO, foreground=GRIS)
     style.configure("Heading.TLabel", background=FONDO, foreground=TEXTO, font="TkHeadingFont")
     style.configure("Aviso.TLabel", background=FONDO, foreground=AVISO)
-    style.configure("TEntry", fieldbackground=SUPERFICIE, foreground=TEXTO, bordercolor=BORDE)
-    style.configure("TCombobox", fieldbackground=SUPERFICIE, foreground=TEXTO, bordercolor=BORDE)
+    style.configure(
+        "TEntry",
+        fieldbackground=SUPERFICIE,
+        foreground=TEXTO,
+        bordercolor=SUPERFICIE,
+        lightcolor=SUPERFICIE,
+        darkcolor=SUPERFICIE,
+        borderwidth=0,
+        relief="flat",
+        padding=4,
+    )
+    style.configure(
+        "TCombobox",
+        fieldbackground=SUPERFICIE,
+        foreground=TEXTO,
+        bordercolor=SUPERFICIE,
+        lightcolor=SUPERFICIE,
+        darkcolor=SUPERFICIE,
+        arrowcolor=ACENTO,
+        borderwidth=0,
+        padding=4,
+    )
     style.configure("TCheckbutton", background=FONDO, foreground=TEXTO)
-    style.configure("TSpinbox", fieldbackground=SUPERFICIE, foreground=TEXTO)
+    style.configure(
+        "TSpinbox",
+        fieldbackground=SUPERFICIE,
+        foreground=TEXTO,
+        bordercolor=SUPERFICIE,
+        lightcolor=SUPERFICIE,
+        darkcolor=SUPERFICIE,
+        borderwidth=0,
+        padding=4,
+    )
     style.configure("TPanedwindow", background=FONDO)
     _estilo_scrollbar_minimal(style)
     style.configure(

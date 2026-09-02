@@ -115,3 +115,31 @@ def test_roundtrip_texto_plano_no_url() -> None:
 
     out = exportar_qr(PAYLOAD_TEXTO, perfil_a_dict(Perfil(nombre="t")), "png", 10)
     assert _decodificar_png(out["datos"]) == PAYLOAD_TEXTO
+
+
+@pytest.mark.integration
+@pytest.mark.decode
+@pytest.mark.raster
+def test_roundtrip_con_logo_central(tmp_path) -> None:
+    pytest.importorskip("PIL")
+    pytest.importorskip("zxingcpp")
+    from tests.png_bytes import escribir_png
+
+    logo = escribir_png(tmp_path / "logo.png", 24, 24, (200, 20, 20))
+    perfil = Perfil(nombre="t", correccion=Correccion.M, logo_path=str(logo))
+    r = exportar(SolicitudQR(PAYLOAD, perfil), "png", px_modulo=10)
+    assert _decodificar_png(r.datos) == PAYLOAD
+
+
+@pytest.mark.integration
+@pytest.mark.decode
+@pytest.mark.raster
+def test_roundtrip_logo_apaisado_grande(tmp_path) -> None:
+    pytest.importorskip("PIL")
+    pytest.importorskip("zxingcpp")
+    from tests.png_bytes import escribir_png
+
+    logo = escribir_png(tmp_path / "wide.png", 800, 200, (20, 20, 200))
+    perfil = Perfil(nombre="t", logo_path=str(logo))
+    r = exportar(SolicitudQR(PAYLOAD, perfil), "png", px_modulo=10)
+    assert _decodificar_png(r.datos) == PAYLOAD

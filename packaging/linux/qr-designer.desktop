@@ -1,0 +1,10 @@
+[Desktop Entry]
+Type=Application
+Name=QR Designer
+Comment=Generador de códigos QR personalizable, rápido y liviano
+Exec=qr-designer
+Icon=qr-designer
+Terminal=false
+Categories=Graphics;RasterGraphics;
+StartupNotify=true
+Keywords=QR;codigo;barcode;

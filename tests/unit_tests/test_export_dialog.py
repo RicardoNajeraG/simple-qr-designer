@@ -6,7 +6,7 @@ from pathlib import Path
 
 import pytest
 
-from qr_designer.export.paths import filetypes_para, resolver_export
+from qr_designer.export.paths import filetypes_logo, filetypes_para, resolver_export
 
 
 @pytest.mark.unit
@@ -75,3 +75,11 @@ def test_filetypes_webp_primero() -> None:
 def test_filetypes_formato_invalido() -> None:
     with pytest.raises(ValueError, match="[Ff]ormato"):
         filetypes_para("gif")
+
+
+@pytest.mark.unit
+def test_filetypes_logo_incluye_svg() -> None:
+    tipos = filetypes_logo()
+    imagenes = next(patron for etiqueta, patron in tipos if etiqueta == "Imágenes")
+    assert "*.svg" in imagenes
+    assert "*.png" in imagenes

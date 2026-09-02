@@ -6,12 +6,14 @@ from dataclasses import dataclass
 
 from qr_designer.config.models import (
     ColorScheme,
+    Correccion,
     MarcoTipo,
     ModuloEstilo,
     Perfil,
     hex_a_rgb,
     parse_color,
 )
+from qr_designer.scene.logo import logo_desde_perfil, perfil_pide_logo
 
 UMBRAL_CONTRASTE = 3.0
 UMBRAL_FILL = 0.70
@@ -52,8 +54,8 @@ def fill_ratio_estilo(estilo: ModuloEstilo) -> float:
 
 def ecc_recomendada_por_estilo(perfil: Perfil) -> str:
     """Sugiere Q/H sin mutar el perfil. Valores: L/M/Q/H."""
-    from qr_designer.config.models import Correccion
-
+    if perfil_pide_logo(perfil):
+        return Correccion.H.value
     ev = evaluar_contraste(perfil)
     actual = perfil.correccion
     if actual is Correccion.AUTO:
@@ -73,6 +75,17 @@ def ecc_recomendada_por_estilo(perfil: Perfil) -> str:
     if orden.get(sugerida, 0) < orden.get(base, 0):
         return base.value
     return sugerida.value
+
+
+def correccion_para_matriz(perfil: Perfil, *, exportar: bool = False) -> Correccion:
+    """ECC usada al construir la matriz. El perfil guardado no se muta."""
+    if perfil_pide_logo(perfil):
+        return Correccion.H
+    if exportar and perfil.correccion is Correccion.AUTO:
+        return Correccion(ecc_recomendada_por_estilo(perfil))
+    if perfil.correccion is Correccion.AUTO:
+        return Correccion.M
+    return perfil.correccion
 
 
 @dataclass(frozen=True)
@@ -128,6 +141,10 @@ def evaluar_contraste(perfil: Perfil) -> EvaluacionContraste:
             f"Baja ocupación del módulo ({fill:.0%}) con estilo {perfil.modulo_estilo.value}; "
             "se recomienda corrección H"
         )
+    if perfil_pide_logo(perfil):
+        avisos.append("Con logotipo se usa corrección H al generar")
+        if logo_desde_perfil(perfil) is None:
+            avisos.append("No se encontró el archivo del logotipo")
     return EvaluacionContraste(
         ratio_modulos=ratio_m,
         ratio_ojos=ratio_o,

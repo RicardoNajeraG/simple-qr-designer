@@ -5,14 +5,14 @@ from __future__ import annotations
 import math
 
 from qr_designer.config.models import (
-    Correccion,
     MarcoTipo,
     ModuloEstilo,
     OjoEstilo,
     Perfil,
 )
 from qr_designer.core.encoder import MatrizQR, codificar
-from qr_designer.scene.primitives import Circle, Escena, Path, Primitiva, Rect, Text
+from qr_designer.scene.primitives import Circle, Escena, Imagen, Path, Primitiva, Rect, Text
+from qr_designer.scene.logo import FINDER_MARGEN, caja_logo, logo_desde_perfil
 
 FRAME_GROSOR = 1.5
 TEXT_BANDA = 3.0
@@ -456,6 +456,43 @@ def _marco(
     return items
 
 
+def _logo(perfil: Perfil, ox: float, oy: float, n: int) -> list[Primitiva]:
+    ruta = logo_desde_perfil(perfil)
+    if ruta is None:
+        return []
+    x, y, w, h = caja_logo(n)
+    margen = min(
+        0.35,
+        max(0.0, x - FINDER_MARGEN),
+        max(0.0, n - FINDER_MARGEN - (x + w)),
+        max(0.0, y - FINDER_MARGEN),
+        max(0.0, n - FINDER_MARGEN - (y + h)),
+    )
+    fondo = perfil.colores.fondo
+    return [
+        Rect(
+            id="logo-fondo",
+            x=ox + x - margen,
+            y=oy + y - margen,
+            w=w + 2 * margen,
+            h=h + 2 * margen,
+            fill=fondo,
+            role="logo_fondo",
+            rx=min(0.45, (w + 2 * margen) / 4),
+            ry=min(0.45, (h + 2 * margen) / 4),
+        ),
+        Imagen(
+            id="logo",
+            x=ox + x,
+            y=oy + y,
+            w=w,
+            h=h,
+            ruta=str(ruta),
+            role="logo",
+        ),
+    ]
+
+
 def construir_escena(matriz: MatrizQR, perfil: Perfil) -> Escena:
     q = perfil.quiet_zone
     n = matriz.size
@@ -469,6 +506,7 @@ def construir_escena(matriz: MatrizQR, perfil: Perfil) -> Escena:
     items.extend(_marco(perfil, inner, pad, width, height))
     items.extend(_modulos(matriz, perfil, ox, oy))
     items.extend(_ojos(matriz, perfil, ox, oy))
+    items.extend(_logo(perfil, ox, oy, n))
     return Escena(
         width=width,
         height=height,
@@ -482,7 +520,9 @@ def construir_escena(matriz: MatrizQR, perfil: Perfil) -> Escena:
 
 
 def escena_desde_contenido(contenido: str, perfil: Perfil) -> Escena:
-    ecc = Correccion.M if perfil.correccion is Correccion.AUTO else perfil.correccion
+    from qr_designer.config.contrast import correccion_para_matriz
+
+    ecc = correccion_para_matriz(perfil, exportar=False)
     matriz = codificar(contenido, ecc)
     return construir_escena(matriz, perfil)
 

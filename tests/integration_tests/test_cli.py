@@ -71,3 +71,61 @@ def test_cli_png_decodificable(tmp_path: Path) -> None:
     leidos = zxingcpp.read_barcodes(img)
     assert leidos
     assert leidos[0].text == payload
+
+
+@pytest.mark.integration
+def test_cli_logo_embebe_en_svg(tmp_path: Path) -> None:
+    from tests.png_bytes import escribir_png
+
+    logo = escribir_png(tmp_path / "logo.png", 3, 3)
+    destino = tmp_path / "qr.svg"
+    proc = subprocess.run(
+        [
+            sys.executable,
+            "-m",
+            "qr_designer",
+            "--url",
+            "https://example.com",
+            "--logo",
+            str(logo),
+            "-o",
+            str(destino),
+        ],
+        capture_output=True,
+        text=True,
+        check=False,
+    )
+    assert proc.returncode == 0, proc.stderr
+    datos = destino.read_text(encoding="utf-8")
+    assert "<image" in datos
+    assert "data:image" in datos
+
+
+@pytest.mark.integration
+def test_cli_logo_svg_embebe_en_svg(tmp_path: Path) -> None:
+    from tests.png_bytes import escribir_svg_rect
+
+    logo = escribir_svg_rect(tmp_path / "logo.svg")
+    destino = tmp_path / "qr.svg"
+    proc = subprocess.run(
+        [
+            sys.executable,
+            "-m",
+            "qr_designer",
+            "--url",
+            "https://example.com",
+            "--logo",
+            str(logo),
+            "-o",
+            str(destino),
+        ],
+        capture_output=True,
+        text=True,
+        check=False,
+    )
+    assert proc.returncode == 0, proc.stderr
+    datos = destino.read_text(encoding="utf-8")
+    assert datos.lower().count("<svg") == 1
+    assert "data:image/svg+xml" not in datos
+    assert 'fill="#ff0000"' in datos
+    assert "<g transform=" in datos

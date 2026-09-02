@@ -1,0 +1,186 @@
+# Publica instaladores nativos cuando sube project.version en pyproject.toml.
+# Los binarios van a un GitHub Release (no se commitean al árbol).
+#
+# Disparo manual: Actions → Release → Run workflow → force = true
+# (útil para generar v0.1.3 la primera vez sin subir el número).
+
+name: Release
+
+on:
+  push:
+    branches: [master, main]
+  workflow_dispatch:
+    inputs:
+      force:
+        description: Empaquetar aunque no haya cambiado la versión
+        type: boolean
+        default: false
+
+concurrency:
+  group: release-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: false
+
+permissions:
+  contents: read
+
+env:
+  UV_PYTHON: "3.11"
+
+jobs:
+  detectar:
+    name: Detectar versión
+    runs-on: ubuntu-latest
+    outputs:
+      should_release: ${{ steps.bump.outputs.should_release }}
+      version: ${{ steps.bump.outputs.version }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Comparar project.version
+        id: bump
+        env:
+          BEFORE: ${{ github.event.before || 'HEAD^' }}
+        run: |
+          extras=()
+          if [ "${{ github.event_name }}" = "workflow_dispatch" ] && [ "${{ github.event.inputs.force }}" = "true" ]; then
+            extras+=(--force)
+          fi
+          python packaging/detect_version_bump.py \
+            --before "$BEFORE" \
+            --github-output "$GITHUB_OUTPUT" \
+            "${extras[@]}"
+
+  tests:
+    name: Tests completos
+    needs: detectar
+    if: needs.detectar.outputs.should_release == 'true'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - uses: astral-sh/setup-uv@v6
+        with:
+          python-version: "3.11"
+          enable-cache: true
+
+      - name: Dependencias de sistema (tkinter, xvfb)
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends \
+            xvfb \
+            tk8.6 \
+            tcl8.6 \
+            libtk8.6 \
+            libfontconfig1 \
+            libx11-6 \
+            libxext6 \
+            libxrender1 \
+            libxft2
+
+      - name: Instalar el proyecto
+        run: uv sync --extra raster --extra decode --extra dev --frozen
+
+      - name: Comprobar tkinter
+        run: xvfb-run -a uv run python -c "import tkinter as tk; r = tk.Tk(); r.destroy()"
+
+      - name: pytest
+        run: xvfb-run -a uv run pytest --tb=short
+
+  empaquetar:
+    name: Empaquetar (${{ matrix.etiqueta }})
+    needs: [detectar, tests]
+    if: needs.detectar.outputs.should_release == 'true'
+    strategy:
+      fail-fast: true
+      matrix:
+        include:
+          - os: windows-latest
+            etiqueta: windows
+          - os: ubuntu-latest
+            etiqueta: linux
+          - os: macos-latest
+            etiqueta: macos
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - uses: astral-sh/setup-uv@v6
+        with:
+          python-version: "3.11"
+          enable-cache: true
+
+      - name: Dependencias de sistema (Linux)
+        if: runner.os == 'Linux'
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends \
+            dpkg-dev \
+            tk8.6 \
+            tcl8.6 \
+            libtk8.6 \
+            libfontconfig1 \
+            libx11-6 \
+            libxext6 \
+            libxrender1 \
+            libxft2 \
+            libxss1
+
+      - name: Instalar el proyecto y PyInstaller
+        run: uv sync --extra raster --extra packaging --frozen
+
+      - name: Construir instalador
+        run: uv run python packaging/build_release.py
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: installer-${{ matrix.etiqueta }}
+          path: dist/release/*
+          if-no-files-found: error
+
+  publicar:
+    name: GitHub Release
+    needs: [detectar, empaquetar]
+    if: needs.detectar.outputs.should_release == 'true'
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          pattern: installer-*
+          merge-multiple: true
+          path: artifacts
+
+      - name: Listar artefactos
+        run: ls -lah artifacts
+
+      - uses: softprops/action-gh-release@v2
+        with:
+          tag_name: v${{ needs.detectar.outputs.version }}
+          name: QR Designer ${{ needs.detectar.outputs.version }}
+          generate_release_notes: true
+          fail_on_unmatched_files: true
+          make_latest: true
+          prerelease: ${{ github.ref_name != 'master' && github.ref_name != 'main' }}
+          files: artifacts/*
+          body: |
+            Instaladores de QR Designer ${{ needs.detectar.outputs.version }}.
+
+            - **Windows:** ejecuta el `.exe`.
+            - **Debian/Ubuntu:** `sudo apt install ./qr-designer-*-linux-*.deb`
+            - **macOS:** abre el `.dmg` (si Gatekeeper bloquea: clic derecho → Abrir). El binario no está notarizado.
