@@ -12,6 +12,7 @@ from qr_designer.config.profiles import PerfilError, es_preset
 from qr_designer.render.canvas import pintar_canvas
 from qr_designer.scene.builders import escena_desde_contenido
 from qr_designer.ui.theme import BORDE, FONDO
+from qr_designer.ui.redondeo import CajaRedonda
 from qr_designer.ui.viewmodel import ViewModel
 
 OnCerrar = Callable[[], None]
@@ -60,8 +61,8 @@ class DialogoPerfiles(tk.Toplevel):
             pass
         self.protocol("WM_DELETE_WINDOW", self._cerrar)
         self.bind("<Escape>", lambda _e: self._cerrar())
-        self.minsize(560, 400)
-        self.geometry("640x440")
+        self.minsize(560, 500)
+        self.geometry("640x560")
 
         cuerpo = ttk.Frame(self, padding=12)
         cuerpo.pack(fill=tk.BOTH, expand=True)
@@ -131,18 +132,23 @@ class DialogoPerfiles(tk.Toplevel):
 
         col_btns = ttk.Frame(cuerpo)
         col_btns.grid(row=0, column=2, sticky="ne")
-        self.btn_nuevo = ttk.Button(col_btns, text="Nuevo perfil", command=self._nuevo)
-        self.btn_nuevo.pack(fill=tk.X, pady=(0, 6))
-        self.btn_aplicar = ttk.Button(col_btns, text="Aplicar", command=self._aplicar)
-        self.btn_aplicar.pack(fill=tk.X, pady=(0, 6))
-        self.btn_duplicar = ttk.Button(col_btns, text="Duplicar", command=self._duplicar)
-        self.btn_duplicar.pack(fill=tk.X, pady=(0, 6))
-        self.btn_renombrar = ttk.Button(col_btns, text="Renombrar", command=self._renombrar)
-        self.btn_renombrar.pack(fill=tk.X, pady=(0, 6))
-        self.btn_eliminar = ttk.Button(col_btns, text="Eliminar", command=self._eliminar)
-        self.btn_eliminar.pack(fill=tk.X, pady=(0, 6))
-        self.btn_cerrar = ttk.Button(col_btns, text="Cerrar", command=self._cerrar)
-        self.btn_cerrar.pack(fill=tk.X, pady=(18, 0))
+
+        def _boton(texto: str, comando, **kw) -> ttk.Button:
+            caja = CajaRedonda(col_btns, fondo=BORDE, borde=BORDE)
+            btn = ttk.Button(caja, text=texto, command=comando, **kw)
+            caja.alojar(btn)
+            caja.pack(fill=tk.X, pady=(0, 6))
+            return btn
+
+        self.btn_nuevo = _boton("Nuevo perfil", self._nuevo)
+        self.btn_aplicar = _boton("Aplicar", self._aplicar)
+        self.btn_duplicar = _boton("Duplicar", self._duplicar)
+        self.btn_renombrar = _boton("Renombrar", self._renombrar)
+        self.btn_eliminar = _boton("Eliminar", self._eliminar)
+        caja_cerrar = CajaRedonda(col_btns, fondo=BORDE, borde=BORDE)
+        self.btn_cerrar = ttk.Button(caja_cerrar, text="Cerrar", command=self._cerrar)
+        caja_cerrar.alojar(self.btn_cerrar)
+        caja_cerrar.pack(fill=tk.X, pady=(18, 0))
 
         self._llenar_arbol()
         self._set_botones(None)

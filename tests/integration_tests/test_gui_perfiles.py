@@ -61,6 +61,66 @@ def test_nombre_duplicado_propuesto() -> None:
     assert nombre_libre_propuesto("Nuevo perfil", {"Nuevo perfil"}) == "Nuevo perfil 2"
 
 
+def _botones_catalogo(dlg):
+    return (
+        dlg.btn_nuevo,
+        dlg.btn_aplicar,
+        dlg.btn_duplicar,
+        dlg.btn_renombrar,
+        dlg.btn_eliminar,
+        dlg.btn_cerrar,
+    )
+
+
+def _altura_geometry(dlg) -> int:
+    # "640x560+10+10" o "640x560-0-0"
+    return int(str(dlg.geometry()).split("x")[1].split("+")[0].split("-")[0])
+
+
+@pytest.mark.gui
+@pytest.mark.integration
+def test_botones_catalogo_visibles_y_apilados(tmp_path) -> None:
+    if not os.environ.get("DISPLAY"):
+        pytest.skip("sin DISPLAY")
+
+    _tk, root, app = _arrancar(tmp_path)
+    try:
+        app.btn_gestionar_perfiles.invoke()
+        root.update()
+        dlg = app.ventana_perfiles
+        assert dlg is not None
+        dlg.update_idletasks()
+
+        izq = dlg.winfo_rootx()
+        der = izq + dlg.winfo_width()
+        top = dlg.winfo_rooty()
+        pie = top + dlg.winfo_height()
+        arbol_centro = dlg.arbol.winfo_rootx() + dlg.arbol.winfo_width() // 2
+
+        botones = _botones_catalogo(dlg)
+        prev_pie = top
+        for btn in botones:
+            caja = btn.master
+            assert btn.winfo_ismapped()
+            assert btn.winfo_viewable()
+            assert caja.winfo_ismapped()
+            assert caja.winfo_width() >= 100
+            assert caja.winfo_height() >= 24
+            assert btn.winfo_width() >= 90
+            assert btn.winfo_height() >= 18
+            assert caja.winfo_rootx() > arbol_centro
+            assert caja.winfo_rootx() >= izq
+            assert caja.winfo_rootx() + caja.winfo_width() <= der
+            assert caja.winfo_rooty() >= prev_pie
+            assert caja.winfo_rooty() + caja.winfo_height() <= pie
+            prev_pie = caja.winfo_rooty() + caja.winfo_height()
+
+        assert dlg.btn_cerrar.winfo_rooty() > dlg.btn_eliminar.winfo_rooty()
+        assert 500 <= _altura_geometry(dlg) <= 580
+    finally:
+        root.destroy()
+
+
 @pytest.mark.gui
 @pytest.mark.integration
 def test_gestionar_perfiles_catalogo_duplicar_eliminar(tmp_path, monkeypatch) -> None:
@@ -86,6 +146,15 @@ def test_gestionar_perfiles_catalogo_duplicar_eliminar(tmp_path, monkeypatch) ->
         assert str(dlg.btn_nuevo.cget("state")) == "normal"
         assert dlg.btn_nuevo.winfo_rootx() > dlg.arbol.winfo_rootx() + dlg.arbol.winfo_width() // 2
         assert dlg.btn_aplicar.winfo_rooty() > dlg.btn_nuevo.winfo_rooty()
+        assert dlg.winfo_height() >= 500
+        assert _altura_geometry(dlg) <= 580
+
+        dlg.seleccionar_nombre("Escanéame")
+        root.update()
+        assert dlg.frm_marco_texto.winfo_ismapped()
+        pie_marco = dlg.lbl_marco.winfo_rooty() + dlg.lbl_marco.winfo_height()
+        pie_dlg = dlg.winfo_rooty() + dlg.winfo_height()
+        assert pie_marco <= pie_dlg
 
         hojas_fabrica = [dlg.arbol.item(i, "text") for i in dlg.arbol.get_children(dlg.IID_FABRICA)]
         assert set(hojas_fabrica) >= {"Clásico", "Redondeado", "Puntos", "Escanéame", "Barras"}

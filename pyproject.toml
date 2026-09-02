@@ -1,6 +1,6 @@
 [project]
 name = "qr-designer"
-version = "0.1.2"
+version = "0.1.3"
 description = "Generador de códigos QR personalizable, rápido y liviano"
 readme = "README.md"
 authors = [

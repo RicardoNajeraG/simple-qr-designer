@@ -26,7 +26,8 @@ def _assert_canvas_centrado(app) -> None:
     canvas = app.canvas
     mw, mh = marco.winfo_width(), marco.winfo_height()
     cw, ch = canvas.winfo_width(), canvas.winfo_height()
-    cx, cy = canvas.winfo_x(), canvas.winfo_y()
+    cx = canvas.winfo_rootx() - marco.winfo_rootx()
+    cy = canvas.winfo_rooty() - marco.winfo_rooty()
     if mw <= 1 or mh <= 1:
         return
     assert abs((cx + cw / 2) - mw / 2) < 8
@@ -97,7 +98,10 @@ def test_ventana_arranca_renderiza_y_cierra(tmp_path) -> None:
         assert app.lbl_estado.winfo_rootx() < app.btn_ayuda.winfo_rootx()
         assert app.btn_ayuda.winfo_rootx() > app.pie.winfo_rootx() + app.pie.winfo_width() // 2
         assert app.marco_preview is not None
-        assert int(str(app.marco_opciones.cget("highlightthickness"))) == 1
+        assert getattr(app.marco_opciones, "radio", 0) >= 8
+        assert getattr(app.marco_preview, "radio", 0) >= 8
+        assert app.marco_opciones.find_withtag("rr")
+        assert app.marco_preview.find_withtag("rr")
         assert app.zona_export is not None
         textos_cabecera = _textos(app.cabecera)
         assert "QR Designer" not in textos_cabecera
@@ -120,10 +124,11 @@ def test_ventana_arranca_renderiza_y_cierra(tmp_path) -> None:
             assert ly1 < iy2 and iy1 < ly2
         assert int(str(app.combo_modulo.cget("width"))) == COMBO_ANCHO
         root.update()
-        fila_url = app.entry_url.master
+        fila_url = app.entry_url.master.master
         fila_url.update_idletasks()
+        caja_url = app.entry_url.master
         if fila_url.winfo_width() > 20:
-            ratio = app.entry_url.winfo_width() / fila_url.winfo_width()
+            ratio = caja_url.winfo_width() / fila_url.winfo_width()
             assert 0.82 <= ratio <= 0.98
         assert not app.frm_marco_texto.winfo_ismapped()
         app.var_marco.set(MarcoTipo.PERIMETRO.value)
@@ -160,10 +165,16 @@ def test_ventana_arranca_renderiza_y_cierra(tmp_path) -> None:
         assert int(app.canvas.cget("width")) == round(app.vm.escena.width * px)
         assert int(app.canvas.cget("height")) == round(app.vm.escena.height * px)
         _assert_canvas_centrado(app)
-        assert app.canvas.winfo_x() >= 0
-        assert app.canvas.winfo_y() >= 0
-        assert app.canvas.winfo_x() + app.canvas.winfo_width() <= app.marco_preview.winfo_width() + 1
-        assert app.canvas.winfo_y() + app.canvas.winfo_height() <= app.marco_preview.winfo_height() + 1
+        assert app.canvas.winfo_rootx() >= app.marco_preview.winfo_rootx()
+        assert app.canvas.winfo_rooty() >= app.marco_preview.winfo_rooty()
+        assert (
+            app.canvas.winfo_rootx() + app.canvas.winfo_width()
+            <= app.marco_preview.winfo_rootx() + app.marco_preview.winfo_width() + 1
+        )
+        assert (
+            app.canvas.winfo_rooty() + app.canvas.winfo_height()
+            <= app.marco_preview.winfo_rooty() + app.marco_preview.winfo_height() + 1
+        )
 
         app.var_avanzado.set(True)
         app._toggle_avanzado()

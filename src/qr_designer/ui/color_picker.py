@@ -16,6 +16,7 @@ from qr_designer.ui.color_math import (
     rgba_a_hex,
 )
 from qr_designer.ui.theme import BORDE, FONDO
+from qr_designer.ui.redondeo import CajaRedonda
 
 OnRgb = Callable[[str], None]
 OnCerrar = Callable[[], None]
@@ -114,11 +115,15 @@ class SelectorColor(tk.Toplevel):
             caja = ttk.Frame(rgba)
             caja.pack(side=tk.LEFT, padx=(0, 8))
             ttk.Label(caja, text=etiqueta).pack(anchor=tk.W)
-            ent = ttk.Entry(caja, textvariable=var, width=4)
-            ent.pack(anchor=tk.W)
+            cromo = CajaRedonda(caja)
+            ent = ttk.Entry(cromo, textvariable=var, width=4)
+            cromo.alojar(ent)
+            cromo.pack(anchor=tk.W)
 
-        self.btn_cerrar = ttk.Button(cuerpo, text="Cerrar", command=self._cerrar)
-        self.btn_cerrar.pack(anchor=tk.E, pady=(12, 0))
+        caja_cerrar = CajaRedonda(cuerpo, fondo=BORDE, borde=BORDE)
+        self.btn_cerrar = ttk.Button(caja_cerrar, text="Cerrar", command=self._cerrar)
+        caja_cerrar.alojar(self.btn_cerrar)
+        caja_cerrar.pack(anchor=tk.E, pady=(12, 0))
 
         self.var_r.trace_add("write", self._on_rgba_var)
         self.var_g.trace_add("write", self._on_rgba_var)
