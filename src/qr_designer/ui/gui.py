@@ -7,7 +7,7 @@ import queue
 import threading
 import tkinter as tk
 from pathlib import Path
-from tkinter import colorchooser, filedialog, messagebox, ttk
+from tkinter import filedialog, messagebox, ttk
 
 from qr_designer.config.models import Correccion, MarcoTipo, ModuloEstilo, OjoEstilo
 from qr_designer.config.profiles import PerfilError, es_preset
@@ -15,6 +15,7 @@ from qr_designer.export.paths import filetypes_para, resolver_export
 from qr_designer.render.canvas import pintar_canvas
 from qr_designer.render.preview import px_para_preview
 from qr_designer.ui.acerca import VentanaAcerca
+from qr_designer.ui.color_picker import SelectorColor
 from qr_designer.ui.perfiles_dialog import DialogoPerfiles
 from qr_designer.ui.theme import (
     ACENTO,
@@ -238,6 +239,7 @@ class QRDesignerApp:
         self.img_ayuda = cargar_png(AYUDA_ICONO, master=root)
         self.ventana_acerca: VentanaAcerca | None = None
         self.ventana_perfiles: DialogoPerfiles | None = None
+        self.ventana_color: SelectorColor | None = None
         self._sash_inicializado = False
         self._preview_photo: tk.PhotoImage | None = None
         self._export_cola: queue.Queue = queue.Queue()
@@ -437,6 +439,7 @@ class QRDesignerApp:
         self.lbl_colores = ttk.Label(izq, text="Colores", style="Heading.TLabel")
         self.lbl_colores.pack(anchor=tk.W, pady=(12, 4))
         self._colores: dict[str, tk.StringVar] = {}
+        self._entry_color: dict[str, ttk.Entry] = {}
         for campo, etiqueta in (
             ("fondo", "Fondo"),
             ("modulos", "Módulos"),
@@ -545,14 +548,16 @@ class QRDesignerApp:
             relief="solid",
             bd=1,
             highlightthickness=0,
-            command=lambda c=campo: self._picker(c),
+            command=lambda c=campo: self._abrir_selector(c),
         )
         sw.pack(side=tk.LEFT, padx=4)
         setattr(self, f"_sw_{campo}", sw)
         ent = ttk.Entry(fila, textvariable=var, width=10)
         ent.pack(side=tk.LEFT)
+        self._entry_color[campo] = ent
         ent.bind("<Return>", lambda _e, c=campo: self._hex(c))
         ent.bind("<FocusOut>", lambda _e, c=campo: self._hex(c))
+        ent.bind("<Button-1>", lambda _e, c=campo: self._abrir_selector(c), add="+")
         pal = ttk.Frame(parent)
         pal.pack(anchor=tk.W, pady=(0, 4))
         if not hasattr(self, "pal_swatches"):
@@ -617,11 +622,44 @@ class QRDesignerApp:
         except Exception as exc:
             self.var_estado.set(str(exc))
 
-    def _picker(self, campo: str) -> None:
+    def _abrir_selector(self, campo: str) -> None:
+        if self.ventana_color is not None:
+            try:
+                if self.ventana_color.campo == campo:
+                    self.ventana_color.lift()
+                    self.ventana_color.focus_set()
+                    return
+                self._cerrar_selector()
+            except tk.TclError:
+                self.ventana_color = None
         actual = self.vm.perfil.colores.to_dict()[campo]
-        elegido = colorchooser.askcolor(color=actual, title=f"Color {campo}")
-        if elegido and elegido[1]:
-            self.vm.set_color(campo, elegido[1])
+        self.ventana_color = SelectorColor(
+            self.root,
+            campo,
+            actual,
+            on_rgb=lambda hexcol, c=campo: self._color_desde_selector(c, hexcol),
+            on_cerrar=self._selector_cerrado,
+        )
+
+    def _color_desde_selector(self, campo: str, hexcol: str) -> None:
+        try:
+            self.vm.set_color(campo, hexcol)
+        except Exception as exc:
+            self.var_estado.set(str(exc))
+
+    def _selector_cerrado(self) -> None:
+        self.ventana_color = None
+
+    def _cerrar_selector(self) -> None:
+        if self.ventana_color is None:
+            return
+        win = self.ventana_color
+        self.ventana_color = None
+        try:
+            win._on_cerrar = None
+            win.destroy()
+        except tk.TclError:
+            return
 
     def _toggle_acerca(self, _event=None) -> None:
         if self.ventana_acerca is not None:
